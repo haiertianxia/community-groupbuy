@@ -1,0 +1,432 @@
+# 🛒 社区团购系统 - 详细设计
+
+> 版本: v1.0 | 日期: 2026-05-03
+
+---
+
+## 一、核心模块详细设计
+
+### 1.1 用户注册登录
+
+**流程：** 微信授权Code → 后端换取OpenID → 创建/查询用户 → 返回JWT Token
+
+**POST /api/v1/auth/login**
+```json
+// Request
+{ "code": "微信授权code" }
+
+// Response
+{
+  "code": 0,
+  "data": {
+    "user_id": "123456",
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "refresh_token": "eyJ...",
+    "is_new_user": true,
+    "phone_bound": false
+  }
+}
+```
+
+**安全设计：**
+- JWT RS256，14天有效期，存储HttpOnly Cookie
+- Refresh Token 30天，存Redis，支持主动注销
+- 同一账号最多3个设备
+
+---
+
+### 1.2 商品管理
+
+**数据模型：**
+```go
+type Product struct {
+    ID           int64   `json:"id"`
+    Name         string  `json:"name"`
+    SubName      string  `json:"sub_name"`
+    CategoryID   int64   `json:"category_id"`
+    LeaderID     int64   `json:"leader_id"`  // 0=平台商品
+    ProductType  int     `json:"product_type"` // 1=普通 2=生鲜 3=虚拟
+    Unit         string  `json:"unit"`
+    Images       []string `json:"images"`
+    Description  string  `json:"description"`
+    Status       int     `json:"status"`     // 0=待审核 1=上架 2=下架
+    ReviewStatus int     `json:"review_status"`
+}
+
+type SKU struct {
+    ID         int64   `json:"id"`
+    ProductID  int64   `json:"product_id"`
+    Name       string  `json:"name"`
+    Price      float64 `json:"price"`        // 划线价
+    GroupPrice float64 `json:"group_price"` // 团购价
+    CostPrice  float64 `json:"cost_price"`
+    Stock      int     `json:"stock"`
+    Specs      string  `json:"specs"`       // JSON: {"颜色":"红","尺码":"M"}
+}
+```
+
+**GET /api/v1/products**
+```json
+// Query: keyword, category_id, leader_id, min_price, max_price, sort, page, page_size
+
+// Response
+{
+  "code": 0,
+  "data": {
+    "list": [{ "id":1,"name":"红富士","group_price":"19.90","sales_count":520 }],
+    "total": 156,
+    "page": 1
+  }
+}
+```
+
+---
+
+### 1.3 团购活动管理
+
+**数据模型：**
+```go
+type GroupBuyActivity struct {
+    ID           int64     `json:"id"`
+    LeaderID     int64     `json:"leader_id"`
+    ProductID    int64     `json:"product_id"`
+    SKUHash      string    `json:"sku_hash"`
+    ActivityName string    `json:"activity_name"`
+    StartTime    time.Time `json:"start_time"`
+    EndTime      time.Time `json:"end_time"`
+    MinPeople    int       `json:"min_people"`
+    MaxPeople    int       `json:"max_people"`     // 每人限购
+    GroupPrice  float64   `json:"group_price"`
+    Stock       int       `json:"stock"`
+    SoldCount   int       `json:"sold_count"`
+    Status      int       `json:"status"`
+    // 0=预热 1=进行中 2=已成团 3=已截团 4=已取消
+    CurrentPeople int      `json:"current_people"`
+}
+```
+
+**POST /api/v1/activities/{id}/join**
+```json
+// Request: { "quantity":1, "address_id":456 }
+// Response
+{
+  "code": 0,
+  "data": {
+    "order_id": 789,
+    "group_id": "G2026050312345",
+    "is_new_group": true,
+    "group_people": 1,
+    "min_people": 10,
+    "pay_amount": "29.90",
+    "payment_params": {
+      "appId": "wx...",
+      "timeStamp": "...",
+      "nonceStr": "...",
+      "package": "prepay_id=...",
+      "signType": "RSA",
+      "paySign": "..."
+    }
+  }
+}
+```
+
+---
+
+### 1.4 订单管理
+
+**订单状态机：**
+```
+CREATED → PAID → SHIPPED → CONFIRMED → COMPLETED
+   ↓         ↓         ↓
+ CLOSED   REFUNDING → REFUNDED
+(超时关单)  (退款中)   (已退款)
+```
+
+**创建订单（事务流程）：**
+1. 校验活动状态（进行中）
+2. Redis预扣库存 + MySQL乐观锁
+3. 创建订单（状态=CREATED）
+4. 发送MQ延时消息（30min后检测超时）
+5. 返回支付参数
+
+**支付回调流程：**
+1. 验签 → 幂等查重 → 事务更新状态 → 发MQ消息 → 成团检测
+
+---
+
+### 1.5 支付服务
+
+**微信JSAPI下单：**
+```go
+type UnifiedOrderReq struct {
+    AppID          string `json:"appid"`
+    MchID          string `json:"mch_id"`
+    OutTradeNo     string `json:"out_trade_no"`
+    TotalFee       int64  `json:"total_fee"`  // 分
+    Body           string `json:"body"`
+    TradeType      string `json:"trade_type"` // JSAPI
+    OpenID         string `json:"openid"`
+    NotifyURL      string `json:"notify_url"`
+    TimeoutExpress string `json:"timeout_express"` // 30m
+}
+```
+
+**分账模型：**
+```go
+// 订单金额100元，分账：
+// 平台佣金: 100 × 10% = 10元
+// 团长货款: 100 - 10 = 90元
+
+type ProfitShareReceiver struct {
+    Type        string `json:"type"`   // WECHATPAY/MERCHANT_ID
+    Account     string `json:"account"`
+    Amount      int64  `json:"amount"` // 分
+    Description string `json:"description"`
+}
+```
+
+---
+
+### 1.6 结算服务
+
+**数据模型：**
+```go
+type Settlement struct {
+    ID               int64    `json:"id"`
+    SettlementNo     string   `json:"settlement_no"`
+    LeaderID         int64    `json:"leader_id"`
+    PeriodStart      time.Time `json:"period_start"`
+    PeriodEnd        time.Time `json:"period_end"`
+    OrderCount       int      `json:"order_count"`
+    GrossAmount      float64  `json:"gross_amount"`    // 订单总额
+    CommissionRate   float64  `json:"commission_rate"` // 佣金比例
+    CommissionAmount  float64  `json:"commission_amount"`
+    AdjustAmount     float64  `json:"adjust_amount"`   // 调增减
+    NetAmount        float64  `json:"net_amount"`     // 实付货款
+    Status           int      `json:"status"`
+    // 0=生成 1=团长确认 2=财务复核 3=已打款 4=已完成
+}
+```
+
+**结算周期：** 每周一生成上周结算单 → 团长确认 → 财务复核 → T+3打款
+
+---
+
+### 1.7 优惠券系统
+
+```go
+type Coupon struct {
+    ID            int64     `json:"id"`
+    Name          string    `json:"name"`
+    Type          int       `json:"type"`     // 1=满减券 2=折扣券 3=直减券
+    Value         float64   `json:"value"`   // 优惠金额或折扣率
+    MinAmount     float64   `json:"min_amount"` // 满X可用
+    TotalCount    int       `json:"total_count"`
+    RemainingCount int      `json:"remaining_count"`
+    ValidStart    time.Time `json:"valid_start"`
+    ValidEnd      time.Time `json:"valid_end"`
+    Scope         int       `json:"scope"`    // 1=全场 2=指定商品 3=指定团长
+    ScopeIDs      string    `json:"scope_ids"` // 关联ID列表
+    Status        int       `json:"status"`
+}
+```
+
+**核销流程：**
+1. 下单时传入优惠券ID
+2. 校验：有效期/使用条件/库存
+3. 扣减优惠金额
+4. 创建UserCoupon记录（状态=已使用）
+5. 订单退款时，优惠券原路退回
+
+---
+
+### 1.8 消息通知服务
+
+```go
+// 消息类型
+const (
+    MsgTypeOrderNotify   = "order_notify"    // 订单通知
+    MsgTypeActivityNotify = "activity_notify" // 活动通知
+    MsgTypeSystemNotify  = "system_notify"   // 系统通知
+    MsgTypeMarketing     = "marketing"        // 营销通知
+)
+
+// 微信订阅消息发送
+type SubscribeMsg struct {
+    ToUser     string `json:"touser"`      // OpenID
+    TemplateID string `json:"template_id"` // 模板ID
+    Page       string `json:"page"`        // 点击跳转页面
+    Data       map[string]struct {
+        Value string `json:"value"`
+        Color string `json:"color"`
+    } `json:"data"`
+}
+```
+
+**通知触发场景：**
+| 场景 | 模板 | 通道 |
+|------|------|------|
+| 参团成功 | 活动参与成功通知 | 微信订阅消息 |
+| 成团/失败 | 拼团结果通知 | 微信订阅消息 |
+| 支付成功 | 订单支付成功 | 微信订阅消息 |
+| 到货通知 | 到货提醒 | 微信订阅消息 |
+| 退款到账 | 退款通知 | 微信订阅消息+短信 |
+| 提现成功 | 提现到账通知 | 微信订阅消息 |
+
+---
+
+## 二、中间件设计
+
+### 2.1 认证中间件
+```go
+func AuthMiddleware() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        token := c.GetHeader("Authorization")
+        // 解析JWT，验证签名和过期时间
+        // 从Redis检查Token是否已注销
+        // 设置ctx.Set("user_id", uid)
+        // 设置ctx.Set("role", role)
+        c.Next()
+    }
+}
+```
+
+### 2.2 限流中间件
+```go
+// 基于Redis + 令牌桶
+func RateLimitMiddleware(rate int, burst int) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        key := "ratelimit:" + c.ClientIP()
+        count, _ := redis.Incr(key)
+        if count == 1 {
+            redis.Expire(key, time.Minute)
+        }
+        if count > int64(rate) {
+            c.JSON(429, Resp{Code: 1001, Message: "请求过于频繁"})
+            c.Abort()
+            return
+        }
+        c.Next()
+    }
+}
+```
+
+### 2.3 日志中间件
+```go
+func LogMiddleware() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        start := time.Now()
+        requestID := c.GetHeader("X-Request-ID")
+        // 记录请求：method, path, ip, request_id
+        c.Next()
+        // 记录响应：status, latency, response_size
+        // 发送到Loki/ES
+    }
+}
+```
+
+---
+
+## 三、任务调度设计
+
+### 3.1 xxl-job任务注册
+
+| 任务ID | 任务名 | Cron表达式 | 说明 |
+|--------|--------|-----------|------|
+| 1 | activity_status_check | */5 * * * * | 每5分钟检测活动状态 |
+| 2 | order_timeout_close | */1 * * * * | 每分钟关单超时订单 |
+| 3 | order_auto_confirm | 0 2 * * * | 每日凌晨2点自动确认7天前订单 |
+| 4 | settlement_generate | 0 1 * * 1 | 每周一凌晨1点生成结算单 |
+| 5 | leader_level_update | 0 0 1 * * | 每月1号更新团长等级 |
+| 6 | payment_reconcile | 0 3 * * * | 每日凌晨3点支付对账 |
+| 7 | refund_status_check | */5 * * * * | 每5分钟检测退款状态 |
+| 8 | growth_rank_update | 0 0 * * * | 每日更新会员等级 |
+
+### 3.2 成团检测任务逻辑
+```go
+func CheckActivityEnd() {
+    // 1. 查询所有"进行中"且"已到结束时间"的活动
+    activities := activityRepo.FindExpiredRunning()
+    for _, act := range activities {
+        if act.CurrentPeople >= act.MinPeople {
+            // 成团成功
+            act.Status = StatusGroupSuccess
+            // 更新所有参与用户订单状态
+            // 发送成团通知
+        } else {
+            // 成团失败
+            act.Status = StatusGroupFailed
+            // 触发退款流程
+            // 发送失败通知
+        }
+        activityRepo.Save(act)
+    }
+}
+```
+
+---
+
+## 四、缓存设计
+
+### 4.1 缓存Key规范
+```
+product:{id}                    # 商品详情, TTL=10min
+products:list:{hash}            # 商品列表(带筛选条件), TTL=5min
+activity:{id}                   # 活动详情, TTL=5min
+leader:{id}                    # 团长信息, TTL=30min
+user:session:{user_id}          # Session, TTL=14天
+sms:code:{phone}               # 验证码, TTL=5min
+lock:stock:{sku_hash}           # 库存分布式锁, TTL=30s
+lock:order:{order_id}           # 订单操作锁, TTL=10s
+rate:{ip}                       # 限流计数, TTL=1min
+```
+
+### 4.2 库存扣减（Redis + MySQL）
+```go
+func DecrStock(skuHash string, quantity int) error {
+    // 1. Redis原子扣减
+    newStock := redis.DecrBy("stock:"+skuHash, quantity)
+    if newStock < 0 {
+        redis.IncrBy("stock:"+skuHash, quantity) // 回滚
+        return ErrStockNotEnough
+    }
+    // 2. MySQL乐观锁更新
+    affected := db.Model(&SKU{}).Where("sku_hash = ? AND stock >= ?", skuHash, quantity).
+        Update("stock", gorm.Expr("stock - ?", quantity))
+    if affected.RowsAffected == 0 {
+        redis.IncrBy("stock:"+skuHash, quantity) // 回滚Redis
+        return ErrStockNotEnough
+    }
+    return nil
+}
+```
+
+---
+
+## 五、MQ消息设计
+
+### 5.1 交换机和队列
+
+| 交换机 | 类型 | 队列 | Routing Key | 说明 |
+|--------|------|------|------------|------|
+| order.exchange | direct | order.timeout.queue | order.timeout | 订单超时检测 |
+| order.exchange | direct | order.paid.queue | order.paid | 支付成功处理 |
+| activity.exchange | fanout | activity.notify.queue | - | 活动状态变更通知 |
+| msg.exchange | direct | msg.wechat.queue | msg.wechat | 微信订阅消息 |
+| msg.exchange | direct | msg.sms.queue | msg.sms | 短信发送 |
+| settlement.exchange | direct | settlement.queue | settlement | 结算触发 |
+
+### 5.2 消息格式
+```json
+{
+  "msg_id": "uuid",
+  "msg_type": "order.paid",
+  "payload": {
+    "order_id": 123,
+    "transaction_id": "wx...",
+    "amount": 2990
+  },
+  "retry": 0,
+  "created_at": "2026-05-03T10:00:00Z"
+}
+```

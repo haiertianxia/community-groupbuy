@@ -1,0 +1,331 @@
+# 🛒 社区团购系统 - 数据库设计
+
+> 版本: v1.0 | 日期: 2026-05-03
+
+---
+
+## 一、ER图
+
+```
+┌─────────────┐       ┌─────────────────┐       ┌──────────────────┐
+│   users     │       │  user_addresses │
+│─────────────│       │─────────────────│       │      leaders     │
+│ id          │◄──────│ user_id         │       │──────────────────│
+│ uid         │       │ id              │       │ id               │
+│ openid      │       │ consignee       │       │ user_id          │
+│ phone       │       │ phone           │       │ leader_no        │
+│ nickname    │       │ province        │       │ nickname         │
+│ avatar      │       │ city            │       │ real_name        │
+│ user_type   │       │ district        │       │ phone            │
+│ status      │       │ address         │       │ province         │
+│ level       │       │ is_default      │       │ city             │
+│ growth_value│       └─────────────────┘       │ district         │
+└─────┬───────┘                                │ pickup_address   │
+      │                                        │ level            │
+      │                                        │ balance          │
+      │ 1:N                                    │ commission_rate  │
+      │                                        │ status           │
+      ▼                                        └────────┬─────────┘
+┌─────────────┐                                      │
+│   orders    │                                      │ 1:N
+│─────────────│                                      │
+│ id          │                                      ▼
+│ order_no    │       ┌──────────────────┐   ┌─────────────┐
+│ user_id     │◄──────│  order_items     │   │group_buy_   │
+│ leader_id   │       │──────────────────│   │activities   │
+│ activity_id │       │ id               │   │─────────────│
+│ group_id    │       │ order_id        │   │ id          │
+│ address_id  │       │ product_id      │   │ leader_id   │──────┐
+│ total_amount│       │ sku_hash         │   │ product_id  │      │
+│ pay_amount  │       │ product_name    │   │ sku_hash    │      │
+│ pay_status  │       │ price           │   │ activity_name│     │
+│ status      │       │ quantity        │   │ start_time  │      │
+│ expired_at  │       │ sub_total        │   │ end_time    │      │
+└─────┬───────┘       └──────────────────┘   │ group_price │      │
+      │                                      │ stock       │      │
+      │ N:1                                  │ status      │◄─────┘
+      ▼                                      └──────┬──────┘
+┌─────────────┐                                      │
+│settlements  │                                      │ 1:N
+│─────────────│                                      ▼
+│ id          │       ┌──────────────────┐   ┌─────────────┐
+│ settlement_no│      │ activity_groups  │   │  products   │
+│ leader_id   │◄──────│──────────────────│   │─────────────│
+│ period_start│       │ id               │   │ id          │
+│ period_end  │       │ activity_id      │   │ name        │
+│ gross_amount│       │ group_no         │   │ category_id │──────┐
+│ commission_ │       │ leader_user_id   │   │ leader_id   │      │
+│   amount    │       │ status           │   │ images      │      │
+│ net_amount  │       │ current_people   │   │ sales_count │      │
+│ status      │       │ min_people       │   │ status      │      │
+└─────────────┘       │ expire_time      │   │ review_status│     │
+                      └──────────────────┘   └──────┬──────┘
+                                                     │
+                                                     │ N:1
+                                                     ▼
+                                              ┌─────────────┐
+                                              │categories   │
+                                              │─────────────│
+                                              │ id          │
+                                              │ name        │
+                                              │ parent_id   │
+                                              │ level       │
+                                              └─────────────┘
+```
+
+---
+
+## 二、表结构说明
+
+### 2.1 用户相关表
+
+#### users（用户表）
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| uid | VARCHAR(32) | 雪花算法生成的全局唯一ID |
+| openid | VARCHAR(128) | 微信OpenID |
+| phone | VARCHAR(32) | 手机号(AES加密存储) |
+| nickname | VARCHAR(64) | 昵称 |
+| avatar | VARCHAR(512) | 头像URL |
+| user_type | TINYINT | 1=普通用户 2=团长 3=管理员 |
+| status | TINYINT | 1=正常 2=禁用 |
+| growth_value | INT | 成长值 |
+| level | INT | 会员等级 |
+| available_points | INT | 可用积分 |
+
+#### user_addresses（收货地址表）
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| user_id | BIGINT | 用户ID |
+| consignee | VARCHAR(64) | 收货人 |
+| phone | VARCHAR(32) | 手机号 |
+| province/city/district | VARCHAR(32) | 省市区 |
+| address | VARCHAR(256) | 详细地址 |
+| is_default | TINYINT | 是否默认地址 |
+| label | VARCHAR(32) | 地址标签(家/公司/学校) |
+
+### 2.2 团长相关表
+
+#### leaders（团长表）
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 团长ID |
+| user_id | BIGINT | 关联用户ID |
+| leader_no | VARCHAR(32) | 团长编号 |
+| nickname | VARCHAR(64) | 团长昵称 |
+| real_name | VARCHAR(64) | 真实姓名 |
+| id_card | VARCHAR(128) | 身份证号(加密) |
+| province/city/district | VARCHAR(32) | 所在地 |
+| pickup_address | VARCHAR(512) | 提货点地址 |
+| pickup_phone | VARCHAR(32) | 提货点电话 |
+| pickup_hours | VARCHAR(128) | 营业时间 |
+| level | INT | 1=实习 2=正式 3=金牌 4=钻石 |
+| monthly_sales | DECIMAL(12,2) | 本月销售额 |
+| total_sales | DECIMAL(14,2) | 累计销售额 |
+| commission_rate | DECIMAL(4,3) | 佣金比例 |
+| balance | DECIMAL(12,2) | 可用余额 |
+| frozen_balance | DECIMAL(12,2) | 冻结金额 |
+| status | TINYINT | 1=待审核 2=通过 3=拒绝 4=禁用 |
+
+### 2.3 商品相关表
+
+#### categories（分类表）
+支持三级分类(parent_id自关联)
+
+#### products（商品表）
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| name | VARCHAR(256) | 商品名称 |
+| category_id | BIGINT | 分类ID |
+| leader_id | BIGINT | 所属团长(0=平台商品) |
+| product_type | TINYINT | 1=普通 2=生鲜 3=虚拟 |
+| images | JSON | 商品图片列表 |
+| description | LONGTEXT | 图文详情 |
+| sales_count | INT | 销量 |
+| view_count | INT | 浏览量 |
+| status | TINYINT | 0=待审核 1=上架 2=下架 |
+| review_status | TINYINT | 0=待审核 1=通过 2=拒绝 |
+
+#### product_skus（SKU表）
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| product_id | BIGINT | 所属商品 |
+| sku_hash | VARCHAR(64) | SKU唯一标识 |
+| name | VARCHAR(128) | SKU规格名 |
+| price | DECIMAL(10,2) | 划线价 |
+| group_price | DECIMAL(10,2) | 团购价 |
+| cost_price | DECIMAL(10,2) | 成本价 |
+| stock | INT | 库存 |
+| sold_count | INT | 已售 |
+
+### 2.4 团购相关表
+
+#### group_buy_activities（团购活动表）
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| activity_no | VARCHAR(32) | 活动编号 |
+| leader_id | BIGINT | 团长ID |
+| product_id | BIGINT | 商品ID |
+| sku_hash | VARCHAR(64) | 关联SKU |
+| activity_name | VARCHAR(256) | 活动名称 |
+| start_time | DATETIME | 开始时间 |
+| end_time | DATETIME | 结束时间 |
+| original_price | DECIMAL(10,2) | 原价 |
+| group_price | DECIMAL(10,2) | 团购价 |
+| deposit_ratio | DECIMAL(3,2) | 定金比例 |
+| stock | INT | 活动库存 |
+| sold_count | INT | 已售 |
+| min_people | INT | 最低成团人数 |
+| max_per_user | INT | 每人限购(0=不限) |
+| current_people | INT | 当前参与人数 |
+| status | TINYINT | 0=预热 1=进行中 2=已成团 3=已截团 4=已取消 |
+
+#### activity_groups（团表）
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| activity_id | BIGINT | 活动ID |
+| group_no | VARCHAR(32) | 团编号 |
+| leader_user_id | BIGINT | 团长用户ID |
+| status | TINYINT | 1=招募中 2=已成团 3=已失败 4=已取消 |
+| current_people | INT | 当前人数 |
+| min_people | INT | 最低成团人数 |
+| expire_time | DATETIME | 团过期时间 |
+
+### 2.5 订单相关表
+
+#### orders（订单主表）
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| order_no | VARCHAR(32) | 订单号 |
+| user_id | BIGINT | 用户ID |
+| leader_id | BIGINT | 团长ID |
+| activity_id | BIGINT | 活动ID |
+| group_id | BIGINT | 团ID |
+| address_snapshot | JSON | 收货地址快照 |
+| total_amount | DECIMAL(10,2) | 商品总价 |
+| discount_amount | DECIMAL(10,2) | 优惠金额 |
+| pay_amount | DECIMAL(10,2) | 实付金额 |
+| pay_status | TINYINT | 0=未支付 1=已支付 2=已退款 |
+| pay_time | DATETIME | 支付时间 |
+| transaction_id | VARCHAR(64) | 支付流水号 |
+| status | TINYINT | 0=已创建 1=已支付 2=已发货 3=已确认 4=已完成 5=已取消 6=退款中 7=已退款 |
+| express_company | VARCHAR(64) | 快递公司 |
+| express_no | VARCHAR(64) | 快递单号 |
+| expired_at | DATETIME | 支付过期时间 |
+
+**订单状态流转：**
+```
+CREATED(0) → PAID(1) → SHIPPED(2) → CONFIRMED(3) → COMPLETED(4)
+   ↓           ↓          ↓
+ CLOSED(5)  REFUNDING(6) REFUNDED(7)
+```
+
+#### order_items（订单明细表）
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| order_id | BIGINT | 订单ID |
+| product_id | BIGINT | 商品ID |
+| sku_hash | VARCHAR(64) | SKU标识 |
+| product_name | VARCHAR(256) | 商品名称(快照) |
+| sku_name | VARCHAR(128) | SKU名称(快照) |
+| image | VARCHAR(512) | 商品图片(快照) |
+| price | DECIMAL(10,2) | 下单价 |
+| quantity | INT | 数量 |
+| sub_total | DECIMAL(10,2) | 小计 |
+
+### 2.6 结算相关表
+
+#### settlements（结算单表）
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT | 主键 |
+| settlement_no | VARCHAR(32) | 结算单号 |
+| leader_id | BIGINT | 团长ID |
+| period_start | DATE | 结算周期开始 |
+| period_end | DATE | 结算周期结束 |
+| order_count | INT | 订单数量 |
+| gross_amount | DECIMAL(12,2) | 订单总金额 |
+| commission_rate | DECIMAL(4,3) | 佣金比例 |
+| commission_amount | DECIMAL(12,2) | 佣金金额 |
+| adjust_amount | DECIMAL(10,2) | 调增减 |
+| net_amount | DECIMAL(12,2) | 实付货款 |
+| status | TINYINT | 0=生成 1=团长确认 2=财务复核 3=已打款 4=已完成 |
+
+---
+
+## 三、索引设计
+
+### 核心查询索引
+```sql
+-- 用户查询
+KEY idx_user_type (user_type)
+KEY idx_status (status)
+
+-- 商品查询
+KEY idx_category_id (category_id)
+KEY idx_leader_id (leader_id)
+KEY idx_status (status)
+KEY idx_sales_count (sales_count)
+
+-- 活动查询
+KEY idx_leader_id (leader_id)
+KEY idx_status (status)
+KEY idx_end_time (end_time)
+KEY idx_leader_status (leader_id, status)
+
+-- 订单查询
+KEY idx_user_id (user_id)
+KEY idx_leader_id (leader_id)
+KEY idx_status (status)
+KEY idx_pay_status (pay_status)
+KEY idx_expired_at (expired_at)
+```
+
+---
+
+## 四、分布式ID设计
+
+使用雪花算法生成全局唯一ID：
+
+```
++------+----------------------+----------------+----------+
+| 符号位 |      时间戳(41位)       | 机器ID(10位)   | 序列号   |
+|  1    |  2026-05-03起69年   | 0-1023         | 0-4095  |
++------+----------------------+----------------+----------+
+```
+
+**各业务ID前缀：**
+| 业务 | 前缀 | 示例 |
+|------|------|------|
+| 用户 | U | U1234567890123456 |
+| 团长 | L | L1234567890123456 |
+| 商品 | P | P1234567890123456 |
+| 活动 | A | A1234567890123456 |
+| 订单 | O | O1234567890123456 |
+| 团 | G | G1234567890123456 |
+| 结算 | S | S1234567890123456 |
+
+---
+
+## 五、分库分表策略（预留）
+
+**当前阶段：** 单库单表，满足中小规模
+
+**预估规模达到1000万订单后，考虑分库：**
+```
+按 leader_id 哈希分库：
+- 库0: leaders where hash(leader_id) % 4 = 0
+- 库1: leaders where hash(leader_id) % 4 = 1
+- 库2: leaders where hash(leader_id) % 4 = 2
+- 库3: leaders where hash(leader_id) % 4 = 3
+
+orders表跟随leaders分库（同一团长的订单在同一库）
+```

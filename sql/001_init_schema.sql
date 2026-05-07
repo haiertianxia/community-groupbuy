@@ -1,0 +1,264 @@
+-- 社区团购系统数据库
+CREATE TABLE IF NOT EXISTS users (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    uid VARCHAR(32) NOT NULL,
+    openid VARCHAR(128) DEFAULT NULL,
+    phone VARCHAR(32) DEFAULT NULL,
+    nickname VARCHAR(64) DEFAULT '',
+    avatar VARCHAR(512) DEFAULT '',
+    user_type TINYINT NOT NULL DEFAULT 1,
+    status TINYINT NOT NULL DEFAULT 1,
+    growth_value INT NOT NULL DEFAULT 0,
+    level INT NOT NULL DEFAULT 1,
+    available_points INT NOT NULL DEFAULT 0,
+    last_login_at DATETIME DEFAULT NULL,
+    deleted_at DATETIME DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_uid (uid),
+    UNIQUE KEY uk_openid (openid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS user_addresses (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    consignee VARCHAR(64) NOT NULL,
+    phone VARCHAR(32) NOT NULL,
+    province VARCHAR(32) NOT NULL,
+    city VARCHAR(32) NOT NULL,
+    district VARCHAR(32) NOT NULL,
+    address VARCHAR(256) NOT NULL,
+    is_default TINYINT NOT NULL DEFAULT 0,
+    label VARCHAR(32) DEFAULT '',
+    deleted_at DATETIME DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS leaders (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    leader_no VARCHAR(32) NOT NULL,
+    nickname VARCHAR(64) NOT NULL,
+    real_name VARCHAR(64) NOT NULL,
+    phone VARCHAR(32) NOT NULL,
+    province VARCHAR(32) NOT NULL,
+    city VARCHAR(32) NOT NULL,
+    district VARCHAR(32) NOT NULL,
+    pickup_address VARCHAR(512) NOT NULL,
+    pickup_phone VARCHAR(32) NOT NULL,
+    pickup_hours VARCHAR(128) DEFAULT '09:00-21:00',
+    level INT NOT NULL DEFAULT 1,
+    monthly_sales DECIMAL(12,2) NOT NULL DEFAULT 0,
+    total_sales DECIMAL(14,2) NOT NULL DEFAULT 0,
+    commission_rate DECIMAL(4,3) NOT NULL DEFAULT 0.050,
+    balance DECIMAL(12,2) NOT NULL DEFAULT 0,
+    frozen_balance DECIMAL(12,2) NOT NULL DEFAULT 0,
+    status TINYINT NOT NULL DEFAULT 1,
+    reject_reason VARCHAR(256) DEFAULT NULL,
+    rating DECIMAL(2,1) NOT NULL DEFAULT 5.0,
+    deleted_at DATETIME DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_user_id (user_id),
+    UNIQUE KEY uk_leader_no (leader_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS categories (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(64) NOT NULL,
+    parent_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    level TINYINT NOT NULL DEFAULT 1,
+    sort INT NOT NULL DEFAULT 0,
+    status TINYINT NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_parent_id (parent_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS products (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(256) NOT NULL,
+    sub_name VARCHAR(256) DEFAULT '',
+    category_id BIGINT UNSIGNED NOT NULL,
+    leader_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    product_type TINYINT NOT NULL DEFAULT 1,
+    unit VARCHAR(16) NOT NULL DEFAULT '件',
+    images JSON NOT NULL,
+    description LONGTEXT,
+    sales_count INT NOT NULL DEFAULT 0,
+    view_count INT NOT NULL DEFAULT 0,
+    status TINYINT NOT NULL DEFAULT 0,
+    review_status TINYINT NOT NULL DEFAULT 0,
+    deleted_at DATETIME DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_category_id (category_id),
+    KEY idx_leader_id (leader_id),
+    KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS product_skus (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    product_id BIGINT UNSIGNED NOT NULL,
+    sku_hash VARCHAR(64) NOT NULL,
+    name VARCHAR(128) NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    group_price DECIMAL(10,2) NOT NULL,
+    cost_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+    stock INT NOT NULL DEFAULT 0,
+    sold_count INT NOT NULL DEFAULT 0,
+    status TINYINT NOT NULL DEFAULT 1,
+    deleted_at DATETIME DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_sku_hash (sku_hash),
+    KEY idx_product_id (product_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS group_buy_activities (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    activity_no VARCHAR(32) NOT NULL,
+    leader_id BIGINT UNSIGNED NOT NULL,
+    product_id BIGINT UNSIGNED NOT NULL,
+    sku_hash VARCHAR(64) NOT NULL,
+    activity_name VARCHAR(256) NOT NULL,
+    start_time DATETIME NOT NULL,
+    end_time DATETIME NOT NULL,
+    original_price DECIMAL(10,2) NOT NULL,
+    group_price DECIMAL(10,2) NOT NULL,
+    deposit_ratio DECIMAL(3,2) NOT NULL DEFAULT 1.00,
+    stock INT NOT NULL,
+    sold_count INT NOT NULL DEFAULT 0,
+    min_people INT NOT NULL DEFAULT 5,
+    max_per_user INT NOT NULL DEFAULT 0,
+    current_people INT NOT NULL DEFAULT 0,
+    status TINYINT NOT NULL DEFAULT 0,
+    rule_description TEXT,
+    pickup_info VARCHAR(512) DEFAULT '',
+    view_count INT NOT NULL DEFAULT 0,
+    deleted_at DATETIME DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_activity_no (activity_no),
+    KEY idx_leader_id (leader_id),
+    KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS activity_groups (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    activity_id BIGINT UNSIGNED NOT NULL,
+    group_no VARCHAR(32) NOT NULL,
+    leader_user_id BIGINT UNSIGNED NOT NULL,
+    status TINYINT NOT NULL DEFAULT 1,
+    current_people INT NOT NULL DEFAULT 1,
+    min_people INT NOT NULL,
+    expire_time DATETIME NOT NULL,
+    success_time DATETIME DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_group_no (group_no),
+    KEY idx_activity_id (activity_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS orders (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(32) NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    leader_id BIGINT UNSIGNED NOT NULL,
+    activity_id BIGINT UNSIGNED NOT NULL,
+    group_id BIGINT UNSIGNED NOT NULL,
+    address_id BIGINT UNSIGNED NOT NULL,
+    address_snapshot JSON NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    pay_amount DECIMAL(10,2) NOT NULL,
+    pay_status TINYINT NOT NULL DEFAULT 0,
+    pay_time DATETIME DEFAULT NULL,
+    pay_method VARCHAR(32) DEFAULT NULL,
+    transaction_id VARCHAR(64) DEFAULT NULL,
+    status TINYINT NOT NULL DEFAULT 0,
+    remark VARCHAR(256) DEFAULT '',
+    express_company VARCHAR(64) DEFAULT NULL,
+    express_no VARCHAR(64) DEFAULT NULL,
+    ship_time DATETIME DEFAULT NULL,
+    confirm_time DATETIME DEFAULT NULL,
+    expired_at DATETIME NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_order_no (order_no),
+    KEY idx_user_id (user_id),
+    KEY idx_leader_id (leader_id),
+    KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS order_items (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT UNSIGNED NOT NULL,
+    product_id BIGINT UNSIGNED NOT NULL,
+    sku_hash VARCHAR(64) NOT NULL,
+    product_name VARCHAR(256) NOT NULL,
+    sku_name VARCHAR(128) NOT NULL,
+    image VARCHAR(512) NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    sub_total DECIMAL(10,2) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_order_id (order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS settlements (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    settlement_no VARCHAR(32) NOT NULL,
+    leader_id BIGINT UNSIGNED NOT NULL,
+    period_start DATE NOT NULL,
+    period_end DATE NOT NULL,
+    order_count INT NOT NULL DEFAULT 0,
+    gross_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    commission_rate DECIMAL(4,3) NOT NULL DEFAULT 0.050,
+    commission_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    adjust_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    net_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+    status TINYINT NOT NULL DEFAULT 0,
+    confirmed_at DATETIME DEFAULT NULL,
+    paid_at DATETIME DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_settlement_no (settlement_no),
+    KEY idx_leader_id (leader_id),
+    KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 优惠券
+CREATE TABLE IF NOT EXISTS coupons (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(128) NOT NULL COMMENT '优惠券名称',
+    type TINYINT NOT NULL DEFAULT 1 COMMENT '1满减 2折扣 3新人券',
+    discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '优惠金额/折扣率',
+    min_amount DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '最低消费金额',
+    total_count INT NOT NULL DEFAULT 0 COMMENT '发放总数 0=不限',
+    remain_count INT NOT NULL DEFAULT 0 COMMENT '剩余数量',
+    valid_days INT NOT NULL DEFAULT 30 COMMENT '领取后有效天数',
+    start_time DATETIME DEFAULT NULL COMMENT '开始时间',
+    end_time DATETIME DEFAULT NULL COMMENT '结束时间',
+    status TINYINT NOT NULL DEFAULT 1 COMMENT '1可用 2禁用',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='优惠券表';
+
+CREATE TABLE IF NOT EXISTS coupon_users (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    coupon_id BIGINT UNSIGNED NOT NULL COMMENT '优惠券ID',
+    user_id BIGINT UNSIGNED NOT NULL COMMENT '用户ID',
+    status TINYINT NOT NULL DEFAULT 0 COMMENT '0未使用 1已使用 2已过期',
+    received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '领取时间',
+    used_at DATETIME DEFAULT NULL COMMENT '使用时间',
+    order_id BIGINT UNSIGNED DEFAULT NULL COMMENT '使用订单ID',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_coupon_user (coupon_id, user_id),
+    KEY idx_user_id (user_id),
+    KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户优惠券表';

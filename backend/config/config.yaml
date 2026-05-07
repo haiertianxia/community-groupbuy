@@ -1,0 +1,36 @@
+app:
+  mode: debug
+  port: 8080
+  env: development
+
+database:
+  host: localhost
+  port: 3306
+  username: root
+  password: password
+  name: community_groupbuy
+  max_idle_conns: 10
+  max_open_conns: 100
+
+redis:
+  addr: localhost:6379
+  password: ""
+  db: 0
+
+jwt:
+  secret: your-secret-key-change-in-production
+  access_expiry: 20160
+  refresh_expiry: 30
+  max_devices: 3
+
+wechat:
+  app_id: ""
+  app_secret: ""
+  mch_id: ""
+  api_key: ""
+
+alipay:
+  app_id: ""
+  private_key: ""
+  public_key: ""
+  notify_url: ""
