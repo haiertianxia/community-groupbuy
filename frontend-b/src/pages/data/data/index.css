@@ -1,0 +1,153 @@
+.data-page {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.section-title-bar {
+  padding: 16px 16px 8px;
+}
+.section-title-bar Text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Summary grid */
+.summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 0 16px;
+  margin-bottom: 10px;
+}
+.data-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dc-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+.dc-label {
+  font-size: 12px;
+  color: #999;
+}
+.dc-sub {
+  font-size: 11px;
+  color: #bbb;
+  margin-top: 2px;
+}
+
+/* Today */
+.today-cards {
+  margin: 0 16px;
+  background: linear-gradient(135deg, #1890ff 0%, #0050b3 100%);
+  border-radius: 12px;
+  padding: 20px;
+  color: #fff;
+}
+.today-main {
+  text-align: center;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+  margin-bottom: 16px;
+}
+.today-sales {
+  display: block;
+  font-size: 32px;
+  font-weight: 700;
+  color: #fff;
+}
+.today-label {
+  display: block;
+  font-size: 13px;
+  color: rgba(255,255,255,0.8);
+  margin-top: 4px;
+}
+.today-stats {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+.ts-item {
+  text-align: center;
+  flex: 1;
+}
+.ts-value {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 2px;
+}
+.ts-label {
+  display: block;
+  font-size: 11px;
+  color: rgba(255,255,255,0.7);
+}
+.ts-div {
+  width: 1px;
+  height: 30px;
+  background: rgba(255,255,255,0.2);
+}
+
+/* Pending */
+.pending-list {
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pending-item {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px;
+  gap: 12px;
+}
+.pending-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.pending-info {
+  flex: 1;
+}
+.pending-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 2px;
+}
+.pending-desc {
+  display: block;
+  font-size: 12px;
+  color: #999;
+}
+.pending-badge {
+  min-width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: #ff4d4f;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+}
+.pending-badge.warning {
+  background: #faad14;
+}

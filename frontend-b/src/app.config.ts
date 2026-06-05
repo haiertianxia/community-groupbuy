@@ -3,13 +3,13 @@
     "pages/index/index",
     "pages/activity/create",
     "pages/activity/list",
-    "pages/product/list",
     "pages/order/list",
     "pages/order/detail",
     "pages/finance/finance",
     "pages/finance/withdraw",
     "pages/data/data",
-    "pages/settings/settings"
+    "pages/settings/settings",
+    "pages/login/login"
   ],
   "window": {
     "backgroundTextStyle": "light",
