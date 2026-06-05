@@ -4,9 +4,9 @@ import Taro from '@tarojs/taro'
 import { api, Activity } from '../../../api/client'
 import './index.css'
 
-const STATUS_LABEL: Record<number, string> = { 0: '待开始', 1: '进行中', 2: '已结束' }
-const STATUS_TAG_COLOR: Record<number, string> = { 0: '#999', 1: '#1890ff', 2: '#52c41a' }
-const STATUS_TAG_BG: Record<number, string> = { 0: '#f5f5f5', 1: '#e6f4ff', 2: '#f6ffed' }
+const STATUS_LABEL: Record<string, string> = { pending: '待开始', active: '进行中', completed: '已结束', closed: '已截团', cancelled: '已取消' }
+const STATUS_TAG_COLOR: Record<string, string> = { pending: '#999', active: '#1890ff', completed: '#52c41a', closed: '#999', cancelled: '#999' }
+const STATUS_TAG_BG: Record<string, string> = { pending: '#f5f5f5', active: '#e6f4ff', completed: '#f6ffed', closed: '#f0f0f0', cancelled: '#f0f0f0' }
 
 export default function ActivityList() {
   const [activities, setActivities] = useState<Activity[]>([])
@@ -17,9 +17,9 @@ export default function ActivityList() {
 
   const statusOptions = [
     { label: '全部', value: undefined },
-    { label: '进行中', value: '1' },
-    { label: '待开始', value: '0' },
-    { label: '已结束', value: '2' },
+    { label: '进行中', value: 'active' },
+    { label: '待开始', value: 'pending' },
+    { label: '已结束', value: 'completed' },
   ]
 
   const fetchActivities = useCallback(async (pageNum: number, reset = false) => {
@@ -95,9 +95,7 @@ export default function ActivityList() {
         {activities.map((act) => (
           <View key={act.id} className='activity-card'>
             <View className='act-cover'>
-              <Text className='cover-placeholder'>
-                {act.cover_image ? '🖼' : '🎯'}
-              </Text>
+              <Text className='cover-placeholder'>🎯</Text>
             </View>
             <View className='act-body'>
               <View className='act-name-row'>
@@ -114,7 +112,7 @@ export default function ActivityList() {
               </View>
               <View className='act-prices'>
                 <Text className='group-price'>¥{act.group_price}</Text>
-                <Text className='original-price'>¥{act.original_price}</Text>
+                <Text className='original-price'>¥{act.product?.original_price || ''}</Text>
               </View>
               <View className='act-meta'>
                 <Text className='act-time'>

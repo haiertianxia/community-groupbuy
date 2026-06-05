@@ -7,13 +7,10 @@ import './index.css'
 export default function SettingsPage() {
   const [leader, setLeader] = useState<Leader | null>(null)
   const [form, setForm] = useState({
-    nickname: '',
-    phone: '',
-    province: '',
-    city: '',
+    community: '',
     district: '',
+    address: '',
     pickup_address: '',
-    pickup_hours: '',
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -24,13 +21,10 @@ export default function SettingsPage() {
       .then(l => {
         setLeader(l)
         setForm({
-          nickname: l.community || '',
-          phone: l.phone || '',
-          province: l.district || '',
-          city: l.district || '',
+          community: l.community || '',
           district: l.district || '',
+          address: l.address || '',
           pickup_address: l.pickup_address || '',
-          pickup_hours: l.pickup_address || '',
         })
       })
       .catch(() => {})
@@ -44,16 +38,21 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     if (!form.community.trim()) {
-      Taro.showToast({ title: '请填写昵称', icon: 'none' })
+      Taro.showToast({ title: '请填写小区名称', icon: 'none' })
       return
     }
-    if (!form.phone.trim()) {
-      Taro.showToast({ title: '请填写手机号', icon: 'none' })
+    if (!form.address.trim()) {
+      Taro.showToast({ title: '请填写详细地址', icon: 'none' })
       return
     }
     setSaving(true)
     try {
-      const updated = await api.registerLeader(form)
+      const updated = await api.registerLeader({
+        community: form.community.trim(),
+        district: form.district.trim() || '未知',
+        address: form.address.trim(),
+        pickup_address: form.pickup_address.trim() || undefined,
+      })
       setLeader(updated)
       Taro.showToast({ title: '保存成功', icon: 'success' })
       setSaved(true)
@@ -93,88 +92,52 @@ export default function SettingsPage() {
           <Text className='avatar-emoji'>👤</Text>
         </View>
         <Text className='profile-nickname'>{leader?.community || '团长'}</Text>
-        {leader?.community && (
-          <Text className='profile-location'>{leader.district} {leader.district}</Text>
+        {leader?.district && (
+          <Text className='profile-location'>{leader.district}</Text>
         )}
       </View>
 
       {/* Edit Form */}
       <View className='form-section'>
-        <View className='form-section-title'>个人信息</View>
+        <View className='form-section-title'>团长信息</View>
 
         <View className='form-item'>
-          <Text className='form-label'>昵称 *</Text>
+          <Text className='form-label'>小区 *</Text>
           <Input
             className='form-input'
-            placeholder='请输入昵称'
+            placeholder='请输入小区名称'
             value={form.community}
-            onInput={e => setField('nickname', e.detail.value)}
+            onInput={e => setField('community', e.detail.value)}
           />
         </View>
 
         <View className='form-item'>
-          <Text className='form-label'>手机号 *</Text>
+          <Text className='form-label'>地区</Text>
           <Input
             className='form-input'
-            type='phone'
-            placeholder='请输入手机号'
-            value={form.phone}
-            onInput={e => setField('phone', e.detail.value)}
-          />
-        </View>
-
-        <View className='form-item'>
-          <Text className='form-label'>省份</Text>
-          <Input
-            className='form-input'
-            placeholder='如：广东省'
+            placeholder='如：朝阳区'
             value={form.district}
-            onInput={e => setField('province', e.detail.value)}
+            onInput={e => setField('district', e.detail.value)}
           />
         </View>
 
-        <View className='form-row'>
-          <View className='form-item'>
-            <Text className='form-label'>城市</Text>
-            <Input
-              className='form-input'
-              placeholder='如：深圳市'
-              value={form.district}
-              onInput={e => setField('city', e.detail.value)}
-            />
-          </View>
-          <View className='form-item'>
-            <Text className='form-label'>区县</Text>
-            <Input
-              className='form-input'
-              placeholder='如：南山区'
-              value={form.district}
-              onInput={e => setField('district', e.detail.value)}
-            />
-          </View>
-        </View>
-      </View>
-
-      <View className='form-section'>
-        <View className='form-section-title'>提货点信息</View>
-
         <View className='form-item'>
-          <Text className='form-label'>提货地址</Text>
+          <Text className='form-label'>地址 *</Text>
           <Input
             className='form-input'
-            placeholder='详细地址'
+            placeholder='详细门牌号'
+            value={form.address}
+            onInput={e => setField('address', e.detail.value)}
+          />
+        </View>
+
+        <View className='form-item'>
+          <Text className='form-label'>提货点</Text>
+          <Input
+            className='form-input'
+            placeholder='自提点地址（选填）'
             value={form.pickup_address}
             onInput={e => setField('pickup_address', e.detail.value)}
-          />
-        </View>
-
-        <View className='form-item'>
-          <Text className='form-label'>营业时间</Text>
-          <Input
-            className='form-input'
-            placeholder='如：09:00-21:00'
-            value={form.pickup_address}
-            onInput={e => setField('pickup_hours', e.detail.value)}
           />
         </View>
       </View>
