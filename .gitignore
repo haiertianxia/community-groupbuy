@@ -20,6 +20,12 @@ build/
 .vscode/
 *.swp
 
+# Python
+__pycache__/
+*.py[cod]
+venv/
+*.egg-info/
+
 # Logs
 *.log
 
