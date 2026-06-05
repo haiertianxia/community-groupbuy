@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react'
 import { View, Text, Image, Navigator, PullDownRefresh } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import { api, Leader, Activity, StatsOverview } from '../../api/client'
+
+const STATUS_LABEL: Record<string, string> = { pending: '待开始', active: '进行中', completed: '已结束', closed: '已截团' }
+const STATUS_COLOR: Record<string, string> = { pending: '#999', active: '#1890ff', completed: '#52c41a', closed: '#999' }
 import './index.css'
 
-const STATUS_LABEL: Record<number, string> = { 0: '待开始', 1: '进行中', 2: '已结束' }
-const STATUS_COLOR: Record<number, string> = { 0: '#999', 1: '#1890ff', 2: '#52c41a' }
+
 
 export default function LeaderDashboard() {
   const [leader, setLeader] = useState<Leader | null>(null)
@@ -49,13 +51,13 @@ export default function LeaderDashboard() {
         <View className='header-bg' />
         <View className='header-content'>
           <Image
-            src={leader?.nickname ? `https://api.dicebear.com/7.x/initials/svg?seed=${leader.nickname}` : 'https://picsum.photos/80/80'}
+            src={leader?.community ? `https://api.dicebear.com/7.x/initials/svg?seed=${leader.community}` : 'https://picsum.photos/80/80'}
             className='avatar'
           />
           <View className='header-info'>
-            <Text className='nickname'>{leader?.nickname || '团长'}</Text>
-            {leader?.province && (
-              <Text className='location'>{leader.province} {leader.city}</Text>
+            <Text className='nickname'>{leader?.community || '团长'}</Text>
+            {(leader?.district || leader?.address) && (
+              <Text className='location'>{leader.district} | {leader.address}</Text>
             )}
           </View>
           <Navigator url='/pages/settings/settings' className='edit-btn'>
@@ -67,8 +69,8 @@ export default function LeaderDashboard() {
       {/* Stats Cards */}
       <View className='stats-grid'>
         <Navigator url='/pages/finance/finance' className='stat-card blue'>
-          <Text className='stat-value'>¥{stats?.today_sales || '0.00'}</Text>
-          <Text className='stat-label'>今日销售额</Text>
+          <Text className='stat-value'>¥{stats?.total_revenue?.toFixed(2) || '0.00'}</Text>
+          <Text className='stat-label'>总销售额</Text>
         </Navigator>
         <Navigator url='/pages/order/list' className='stat-card orange'>
           <Text className='stat-value'>{stats?.today_orders || 0}</Text>
@@ -79,8 +81,8 @@ export default function LeaderDashboard() {
           <Text className='stat-label'>待发货</Text>
         </Navigator>
         <Navigator url='/pages/order/list?tab=2' className='stat-card red'>
-          <Text className='stat-value'>{stats?.pending_refunds || 0}</Text>
-          <Text className='stat-label'>退款申请</Text>
+          <Text className='stat-value'>{stats?.pending_leaders || 0}</Text>
+          <Text className='stat-label'>待审核团长</Text>
         </Navigator>
       </View>
 
@@ -88,7 +90,7 @@ export default function LeaderDashboard() {
       <View className='balance-card'>
         <View className='balance-info'>
           <Text className='balance-label'>可提现余额</Text>
-          <Text className='balance-value'>¥{stats?.balance || '0.00'}</Text>
+          <Text className='balance-value'>¥{stats?.total_revenue?.toFixed(2) || '0.00'}</Text>
         </View>
         <Navigator url='/pages/finance/withdraw' className='withdraw-btn'>
           <Text>提现</Text>
@@ -128,11 +130,11 @@ export default function LeaderDashboard() {
             {activities.map((act) => (
               <Navigator key={act.id} url={`/pages/activity/list?id=${act.id}`} className='activity-item'>
                 <View className='act-left'>
-                  <Text className='act-name'>{act.activity_name}</Text>
+                  <Text className='act-name'>{act.description || act.product?.name || '团购活动'}</Text>
                   <Text className='act-price'>¥{act.group_price}</Text>
                 </View>
                 <View className='act-right'>
-                  <Text className='act-people'>{act.current_people}/{act.min_people}人</Text>
+                  <Text className='act-people'>{act.current_participants}/{act.min_participants}人</Text>
                   <Text className='act-status' style={{ color: STATUS_COLOR[act.status] || '#1890ff' }}>
                     {STATUS_LABEL[act.status] || '进行中'}
                   </Text>

@@ -49,7 +49,7 @@ export default function DataPage() {
         <View className='summary-grid'>
           <StatCard
             label='累计销售额'
-            value={`¥${stats?.total_sales || '0.00'}`}
+            value={`¥${stats?.total_revenue || '0.00'}`}
             color='#1890ff'
             sub='总订单金额'
           />

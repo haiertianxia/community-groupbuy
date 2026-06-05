@@ -13,7 +13,7 @@ export default function WithdrawPage() {
   useEffect(() => {
     api.getStatsOverview()
       .then((stats) => {
-        setBalance(stats.balance || '0.00')
+        setBalance(stats.total_revenue || '0.00')
       })
       .catch(() => {})
   }, [])

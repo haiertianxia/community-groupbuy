@@ -124,8 +124,9 @@ function ProductManagement() {
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="商品名称" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="category" label="分类"><Input /></Form.Item>
-          <Form.Item name="price" label="价格" rules={[{ required: true }]}><Input type="number" /></Form.Item>
+          <Form.Item name="original_price" label="价格" rules={[{ required: true }]}><Input type="number" /></Form.Item>
           <Form.Item name="stock" label="库存"><Input type="number" /></Form.Item>
+          <Form.Item name="unit" label="单位"><Input placeholder="件/kg/箱" /></Form.Item>
           <Form.Item name="description" label="描述"><Input.TextArea rows={3} /></Form.Item>
         </Form>
       </Modal>
@@ -161,7 +162,7 @@ function ActivityManagement() {
         columns={[
           { title: '活动名称', dataIndex: 'title', key: 'title' },
           { title: '团购价', dataIndex: 'group_price', key: 'group_price', render: (v: number) => `¥${v?.toFixed(2) || '0.00'}` },
-          { title: '参团人数', key: 'people', render: (_: any, r: any) => `${r.current_people || 0}/${r.min_people || 0}` },
+          { title: '参团人数', key: 'people', render: (_: any, r: any) => `${r.current_participants || 0}/${r.min_participants || 0}` },
           { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.text || v}</Tag> },
           { title: '开始时间', dataIndex: 'start_time', key: 'start_time' },
           { title: '结束时间', dataIndex: 'end_time', key: 'end_time' },

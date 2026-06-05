@@ -139,7 +139,7 @@ export default function OrderList() {
         {filteredOrders.map(order => {
           const info = STATUS_INFO[order.status] || { text: order.status, color: '#999' }
           const activity = order.activity
-          const coverImage = activity?.banner_images?.[0] || activity?.product?.image || `https://picsum.photos/120/120?random=${order.id}`
+          const coverImage = activity?.product?.images?.[0] || activity?.product?.image || `https://picsum.photos/120/120?random=${order.id}`
 
           return (
             <Navigator
@@ -158,7 +158,7 @@ export default function OrderList() {
                   <Text className='item-name' numberOfLines={2}>
                     {activity?.name || '团购商品'}
                   </Text>
-                  <Text className='item-price'>¥{order.pay_amount}</Text>
+                  <Text className='item-price'>¥{order.total_amount}</Text>
                   <Text className='item-time'>
                     {new Date(order.created_at).toLocaleDateString()}
                   </Text>

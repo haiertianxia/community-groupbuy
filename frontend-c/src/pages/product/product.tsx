@@ -63,8 +63,8 @@ export default function ProductDetail() {
         {/* Info */}
         <View className='info-section'>
           <View className='price-row'>
-            <Text className='sale-price'>¥{product.price}</Text>
-            {product.original_price > product.price && (
+            <Text className='sale-price'>¥{product.original_price}</Text>
+            {product.original_price > product.original_price && (
               <Text className='orig-price'>¥{product.original_price}</Text>
             )}
           </View>

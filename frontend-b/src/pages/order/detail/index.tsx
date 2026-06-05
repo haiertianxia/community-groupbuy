@@ -123,7 +123,7 @@ export default function OrderDetail() {
         <View className='info-row'>
           <Text className='info-label'>活动</Text>
           <Text className='info-value'>
-            {order.activity?.activity_name || `#${order.activity_id}`}
+            {order.activity?.description || `#${order.activity_id}`}
           </Text>
         </View>
         <View className='info-row'>
@@ -132,7 +132,7 @@ export default function OrderDetail() {
         </View>
         <View className='info-row'>
           <Text className='info-label'>订单金额</Text>
-          <Text className='info-value price'>¥{order.pay_amount}</Text>
+          <Text className='info-value price'>¥{order.total_amount}</Text>
         </View>
         <View className='info-row'>
           <Text className='info-label'>下单时间</Text>

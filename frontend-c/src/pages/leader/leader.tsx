@@ -12,13 +12,10 @@ export default function LeaderPage() {
   const [applying, setApplying] = useState(false)
 
   // Form
-  const [nickname, setNickname] = useState('')
-  const [phone, setPhone] = useState('')
-  const [province, setProvince] = useState('')
-  const [city, setCity] = useState('')
+  const [community, setCommunity] = useState('')
   const [district, setDistrict] = useState('')
+  const [address, setAddress] = useState('')
   const [pickupAddress, setPickupAddress] = useState('')
-  const [pickupHours, setPickupHours] = useState('')
   const [step, setStep] = useState<'loading' | 'registered' | 'apply' | 'pending'>('loading')
 
   useEffect(() => {
@@ -43,20 +40,17 @@ export default function LeaderPage() {
   }
 
   const handleApply = async () => {
-    if (!nickname.trim() || !phone.trim() || !pickupAddress.trim()) {
-      Taro.showToast({ title: '请填写完整信息', icon: 'none' })
+    if (!community.trim() || !address.trim()) {
+      Taro.showToast({ title: '请填写小区和详细地址', icon: 'none' })
       return
     }
     setApplying(true)
     try {
       await api.registerAsLeader({
-        nickname: nickname.trim(),
-        phone: phone.trim(),
-        province: province.trim() || '未知',
-        city: city.trim() || '未知',
+        community: community.trim(),
         district: district.trim() || '未知',
-        pickup_address: pickupAddress.trim(),
-        pickup_hours: pickupHours.trim() || '9:00-21:00',
+        address: address.trim(),
+        pickup_address: pickupAddress.trim() || undefined,
       })
       Taro.showToast({ title: '申请已提交', icon: 'success' })
       setStep('pending')
@@ -85,21 +79,29 @@ export default function LeaderPage() {
           </View>
           <View className='leader-card'>
             <View className='leader-info-row'>
-              <Text className='info-label'>昵称</Text>
-              <Text className='info-value'>{leader.nickname}</Text>
+              <Text className='info-label'>小区</Text>
+              <Text className='info-value'>{leader.community}</Text>
             </View>
             <View className='leader-info-row'>
-              <Text className='info-label'>提货点</Text>
-              <Text className='info-value'>{leader.pickup_address}</Text>
+              <Text className='info-label'>区域</Text>
+              <Text className='info-value'>{leader.district}</Text>
             </View>
             <View className='leader-info-row'>
-              <Text className='info-label'>营业时间</Text>
-              <Text className='info-value'>{leader.pickup_hours}</Text>
+              <Text className='info-label'>地址</Text>
+              <Text className='info-value'>{leader.address}</Text>
             </View>
-            <View className='leader-info-row'>
-              <Text className='info-label'>服务区域</Text>
-              <Text className='info-value'>{leader.province} {leader.city} {leader.district}</Text>
-            </View>
+            {leader.pickup_address && (
+              <View className='leader-info-row'>
+                <Text className='info-label'>提货点</Text>
+                <Text className='info-value'>{leader.pickup_address}</Text>
+              </View>
+            )}
+            {leader.commission_rate > 0 && (
+              <View className='leader-info-row'>
+                <Text className='info-label'>佣金比例</Text>
+                <Text className='info-value'>{leader.commission_rate}%</Text>
+              </View>
+            )}
           </View>
 
           <Navigator url='/pages/leader/orders' className='orders-btn'>
@@ -126,45 +128,16 @@ export default function LeaderPage() {
 
           <View className='form-section'>
             <View className='form-row'>
-              <Text className='row-label'>团长昵称</Text>
+              <Text className='row-label'>所在小区 *</Text>
               <Input
                 className='row-input'
-                placeholder='设置您的昵称'
-                value={nickname}
-                onInput={(e: any) => setNickname(e.detail.value)}
+                placeholder='小区名称'
+                value={community}
+                onInput={(e: any) => setCommunity(e.detail.value)}
               />
             </View>
             <View className='form-row'>
-              <Text className='row-label'>手机号</Text>
-              <Input
-                className='row-input'
-                type='number'
-                placeholder='您的联系电话'
-                value={phone}
-                onInput={(e: any) => setPhone(e.detail.value)}
-                maxLength={11}
-              />
-            </View>
-            <View className='form-row'>
-              <Text className='row-label'>省份</Text>
-              <Input
-                className='row-input'
-                placeholder='所在省份'
-                value={province}
-                onInput={(e: any) => setProvince(e.detail.value)}
-              />
-            </View>
-            <View className='form-row'>
-              <Text className='row-label'>城市</Text>
-              <Input
-                className='row-input'
-                placeholder='所在城市'
-                value={city}
-                onInput={(e: any) => setCity(e.detail.value)}
-              />
-            </View>
-            <View className='form-row'>
-              <Text className='row-label'>区县</Text>
+              <Text className='row-label'>地区</Text>
               <Input
                 className='row-input'
                 placeholder='所在区县'
@@ -173,21 +146,21 @@ export default function LeaderPage() {
               />
             </View>
             <View className='form-row'>
-              <Text className='row-label'>提货地址</Text>
+              <Text className='row-label'>详细地址 *</Text>
               <Input
                 className='row-input'
-                placeholder='小区/写字楼名称'
-                value={pickupAddress}
-                onInput={(e: any) => setPickupAddress(e.detail.value)}
+                placeholder='街道/门牌号'
+                value={address}
+                onInput={(e: any) => setAddress(e.detail.value)}
               />
             </View>
             <View className='form-row'>
-              <Text className='row-label'>营业时间</Text>
+              <Text className='row-label'>提货地址</Text>
               <Input
                 className='row-input'
-                placeholder='如：9:00-21:00'
-                value={pickupHours}
-                onInput={(e: any) => setPickupHours(e.detail.value)}
+                placeholder='自提点（选填）'
+                value={pickupAddress}
+                onInput={(e: any) => setPickupAddress(e.detail.value)}
               />
             </View>
           </View>

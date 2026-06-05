@@ -118,13 +118,14 @@ export default function ActivityDetail() {
   }
 
   const a = activity
-  const progress = a.min_people > 0
-    ? Math.min((a.current_people / a.min_people) * 100, 100)
+  const progress = a.min_participants > 0
+    ? Math.min((a.current_participants / a.min_participants) * 100, 100)
     : 0
-  const discount = a.original_price > 0 && a.group_price > 0
-    ? ((a.original_price - a.group_price) / a.original_price * 100).toFixed(0)
+  const origPrice = a.product?.original_price || a.group_price
+  const discount = origPrice > 0 && a.group_price > 0
+    ? ((origPrice - a.group_price) / origPrice * 100).toFixed(0)
     : '0'
-  const coverImage = a.banner_images?.[0] || a.image || `https://picsum.photos/750/500?random=${a.id}`
+  const coverImage = `https://picsum.photos/750/500?random=${a.id}`
 
   return (
     <View className='activity-page'>
@@ -136,11 +137,11 @@ export default function ActivityDetail() {
           <View className='cover-overlay'>
             <View className='price-tag'>
               <Text className='group-price'>¥{a.group_price}</Text>
-              <Text className='original-price'>¥{a.original_price}</Text>
+              <Text className='original-price'>¥{origPrice}</Text>
             </View>
             {Number(discount) > 0 && (
               <View className='discount-tag'>
-                <Text>省{Math.round(a.original_price - a.group_price)}元</Text>
+                <Text>省{Math.round(origPrice - a.group_price)}元</Text>
               </View>
             )}
           </View>
@@ -148,33 +149,21 @@ export default function ActivityDetail() {
 
         {/* Activity Info */}
         <View className='info-section'>
-          <Text className='activity-name'>{a.name}</Text>
+          <Text className='activity-name'>{a.product?.name || "团购活动"}</Text>
           {a.description && (
             <Text className='activity-desc'>{a.description}</Text>
           )}
           <View className='tags'>
             <Text className='tag'>{getRemainTime(a.end_time)}</Text>
-            <Text className='tag'>满{a.min_people}人成团</Text>
-            {a.max_per_user && a.max_per_user > 0 && (
-              <Text className='tag'>限购{a.max_per_user}份</Text>
-            )}
+            <Text className='tag'>满{a.min_participants}人成团</Text>
+
             <Text className='tag status-tag' style={{ background: a.status === 'active' ? '#fff0e6' : '#f0f0f0', color: a.status === 'active' ? '#ff6b35' : '#999' }}>
               {getStatusText(a.status)}
             </Text>
           </View>
         </View>
 
-        {/* Product Images */}
-        {a.product && a.product.images && a.product.images.length > 0 && (
-          <View className='images-section'>
-            <Text className='section-title'>商品图片</Text>
-            <View className='product-images'>
-              {a.product.images.map((img, idx) => (
-                <Image key={idx} src={img} mode='widthFix' className='product-image' />
-              ))}
-            </View>
-          </View>
-        )}
+
 
         {/* Leader Info */}
         {a.leader && (
@@ -182,23 +171,20 @@ export default function ActivityDetail() {
             <Text className='section-title'>团长信息</Text>
             <View className='leader-card'>
               <Image
-                src={a.leader.avatar || 'https://picsum.photos/100/100?random=avatar'}
+                src='https://picsum.photos/100/100?random=avatar'
                 className='leader-avatar'
               />
               <View className='leader-info'>
-                <Text className='leader-name'>{a.leader.nickname}</Text>
+                <Text className='leader-name'>{a.leader?.community || "待定"}</Text>
                 <Text className='leader-area'>
-                  {a.leader.province} {a.leader.city} {a.leader.district}
+                  {a.leader?.district || ""}
                 </Text>
               </View>
             </View>
-            {a.pickup_address && (
+            {a.leader?.pickup_address && (
               <View className='pickup-info'>
                 <Text className='pickup-label'>提货地址</Text>
-                <Text className='pickup-address'>{a.pickup_address}</Text>
-                {a.pickup_hours && (
-                  <Text className='pickup-hours'>营业时间: {a.pickup_hours}</Text>
-                )}
+                <Text className='pickup-address'>{a.leader?.pickup_address}</Text>
               </View>
             )}
           </View>
@@ -213,20 +199,20 @@ export default function ActivityDetail() {
                 <View className='progress-fill' style={{ width: `${progress}%` }} />
               </View>
             </View>
-            <Text className='progress-count'>{a.current_people}/{a.min_people}人</Text>
+            <Text className='progress-count'>{a.current_participants}/{a.min_participants}人</Text>
           </View>
           <Text className='progress-tip'>
-            {a.current_people >= a.min_people
+            {a.current_participants >= a.min_participants
               ? '🎉 已成团，等待发货'
-              : `还差 ${a.min_people - a.current_people} 人成团`}
+              : `还差 ${a.min_participants - a.current_participants} 人成团`}
           </Text>
         </View>
 
-        {/* Rules */}
-        {a.rule_description && (
+        {/* Description */}
+        {a.description && (
           <View className='rules-section'>
-            <Text className='section-title'>活动规则</Text>
-            <Text className='rules-text'>{a.rule_description}</Text>
+            <Text className='section-title'>活动说明</Text>
+            <Text className='rules-text'>{a.description}</Text>
           </View>
         )}
 
@@ -237,7 +223,7 @@ export default function ActivityDetail() {
           {deliveryType === 'pickup' && (
             <View className='pickup-notice'>
               <Text className='pickup-notice-text'>
-                📍 自提点：{a.pickup_address || '请前往提货'}
+                📍 自提点：{a.leader?.pickup_address || '请前往提货'}
               </Text>
             </View>
           )}
@@ -292,7 +278,7 @@ export default function ActivityDetail() {
                 className='form-input'
                 placeholder={
                   deliveryType === 'pickup'
-                    ? (a.pickup_address || '请填写自提地址')
+                    ? (a.leader?.pickup_address || '请填写自提地址')
                     : '请填写详细收货地址'
                 }
                 value={address}
@@ -313,7 +299,7 @@ export default function ActivityDetail() {
               <Text className='qty-value'>{quantity}</Text>
               <View
                 className='qty-btn'
-                onClick={() => setQuantity(q => Math.min(a.stock || 99, q + 1))}
+                onClick={() => setQuantity(q => Math.min((a.product?.stock || 99) || 99, q + 1))}
               >
                 <Text>+</Text>
               </View>

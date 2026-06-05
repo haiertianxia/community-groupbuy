@@ -51,15 +51,15 @@ export default function FinancePage() {
       {/* Balance Overview */}
       <View className='balance-hero'>
         <Text className='balance-label'>可提现余额</Text>
-        <Text className='balance-amount'>¥{stats?.balance || '0.00'}</Text>
+        <Text className='balance-amount'>¥{stats?.total_revenue || '0.00'}</Text>
         <View className='balance-detail-row'>
           <View className='balance-item'>
             <Text className='b-label'>冻结中</Text>
-            <Text className='b-value'>¥{stats?.frozen_balance || '0.00'}</Text>
+            <Text className='b-value'>¥{stats?.total_revenue || '0.00'}</Text>
           </View>
           <View className='balance-item'>
             <Text className='b-label'>累计销售额</Text>
-            <Text className='b-value'>¥{stats?.total_sales || '0.00'}</Text>
+            <Text className='b-value'>¥{stats?.total_revenue || '0.00'}</Text>
           </View>
         </View>
         <Navigator url='/pages/finance/withdraw' className='withdraw-cta'>

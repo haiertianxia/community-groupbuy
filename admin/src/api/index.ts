@@ -1,15 +1,12 @@
 import axios from 'axios'
 import { message } from 'antd'
-import { useNavigate } from 'react-router-dom'
 
-// Create axios instance
 const api = axios.create({
   baseURL: '/api',
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Request interceptor — attach JWT
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('admin_token')
   if (token) {
@@ -18,7 +15,6 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Response interceptor — handle 401 / errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -28,15 +24,23 @@ api.interceptors.response.use(
       window.location.href = '/login'
       return Promise.reject(new Error('未登录或登录已过期'))
     }
-    const detail = error.response?.data?.detail || error.message || '请求失败'
-    if (error.config?.method !== 'get' || error.response?.status >= 500) {
+    const detail =
+      error.response?.data?.detail || error.message || '请求失败'
+    if (
+      error.config?.method !== 'get' ||
+      error.response?.status >= 500
+    ) {
       message.error(detail)
     }
     return Promise.reject(error)
   }
 )
 
-// ─── Auth ────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Types — aligned with FastAPI backend
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Auth ────────────────────────────────────────────────────────────────────
 
 export interface LoginForm {
   email: string
@@ -47,7 +51,10 @@ export interface AuthUser {
   id: number
   username: string
   email: string
+  phone?: string
   role: string
+  is_active: boolean
+  created_at: string
 }
 
 export interface LoginRes {
@@ -62,35 +69,41 @@ export const authApi = {
   me: () => api.get<AuthUser>('/auth/me'),
 }
 
-// ─── Stats ───────────────────────────────────────────────────────────────────
+// ── Stats ───────────────────────────────────────────────────────────────────
 
 export interface StatsOverview {
   total_users: number
-  total_leaders: number
+  total_products: number
+  total_activities: number
   total_orders: number
   total_revenue: number
-  pending_orders: number
-  pending_products: number
+  active_leaders: number
+  pending_leaders: number
   pending_activities: number
+  today_orders: number
 }
 
 export const statsApi = {
   overview: () => api.get<StatsOverview>('/stats/overview'),
 }
 
-// ─── Products ─────────────────────────────────────────────────────────────────
+// ── Products ─────────────────────────────────────────────────────────────────
 
 export interface Product {
   id: number
   name: string
-  category: string
-  price: number
-  leader?: string
-  status: number
-  image?: string
   description?: string
-  stock?: number
-  created_at?: string
+  category: string
+  images?: string | null
+  original_price: number
+  cost_price: number
+  unit: string
+  stock: number
+  sales_count: number
+  status: string // 'active' | 'disabled' | 'deleted'
+  rating: number
+  created_at: string
+  updated_at: string
 }
 
 export interface PaginatedRes<T> {
@@ -101,105 +114,120 @@ export interface PaginatedRes<T> {
 }
 
 export const productsApi = {
-  list: (params?: { status?: string; page?: number; page_size?: number }) =>
-    api.get<PaginatedRes<Product>>('/products', { params }),
+  list: (params?: {
+    status?: string
+    page?: number
+    page_size?: number
+  }) => api.get<PaginatedRes<Product>>('/products', { params }),
+  create: (data: {
+    name: string
+    category: string
+    original_price: number
+    cost_price?: number
+    unit?: string
+    stock?: number
+    description?: string
+  }) => api.post<Product>('/products', data),
   update: (id: number, data: Partial<Product>) =>
     api.put<Product>(`/products/${id}`, data),
-  audit: (id: number, approved: boolean, remark = '') =>
-    api.put(`/products/${id}/audit`, { approved, remark }),
 }
 
-// ─── Activities ───────────────────────────────────────────────────────────────
+// ── Activities ───────────────────────────────────────────────────────────────
 
 export interface Activity {
   id: number
-  title: string
-  type: string
-  leader?: string
-  status: number
-  start_date?: string
-  end_date?: string
-  participants?: number
-  created_at?: string
+  product_id: number
+  leader_id: number
+  group_price: number
+  min_participants: number
+  max_participants: number
+  current_participants: number
+  start_time: string
+  end_time: string
+  status: string
+  description?: string
+  created_at: string
+  product?: Product
+  leader?: Leader | null
 }
 
 export const activitiesApi = {
-  list: (params?: { status?: string; page?: number; page_size?: number }) =>
-    api.get<PaginatedRes<Activity>>('/activities', { params }),
-  audit: (id: number, approved: boolean, remark = '') =>
-    api.put(`/activities/${id}/audit`, { approved, remark }),
+  list: (params?: {
+    status?: string
+    page?: number
+    page_size?: number
+  }) => api.get<PaginatedRes<Activity>>('/activities', { params }),
+  create: (data: {
+    product_id: number
+    leader_id: number
+    group_price: number
+    min_participants?: number
+    max_participants?: number
+    start_time: string
+    end_time: string
+    description?: string
+  }) => api.post<Activity>('/activities', data),
+  close: (id: number) =>
+    api.post<Activity>(`/activities/${id}/close`),
 }
 
-// ─── Orders ───────────────────────────────────────────────────────────────────
+// ── Orders ───────────────────────────────────────────────────────────────────
 
 export interface Order {
   id: number
   order_no: string
   user_id: number
-  leader_id: number
-  total_amount: number
-  status: number
-  created_at: string
-  items?: OrderItem[]
-  user_nickname?: string
-  leader_nickname?: string
-}
-
-export interface OrderItem {
-  product_name: string
+  activity_id: number
   quantity: number
-  price: number
-}
-
-export interface PaginatedOrderRes {
-  items: Order[]
-  total: number
-  page: number
-  page_size: number
+  unit_price: number
+  total_amount: number
+  commission_amount: number
+  status: string
+  paid_at?: string
+  refund_reason?: string
+  remark?: string
+  delivery_type?: string
+  receiver_name?: string
+  receiver_phone?: string
+  address?: string
+  created_at: string
+  updated_at: string
+  activity?: Activity
 }
 
 export const ordersApi = {
-  list: (params?: { status?: string; page?: number; page_size?: number }) =>
-    api.get<PaginatedOrderRes>('/orders', { params }),
+  list: (params?: {
+    status?: string
+    page?: number
+    page_size?: number
+  }) =>
+    api.get<PaginatedRes<Order>>('/orders', { params }),
   detail: (id: number) => api.get<Order>(`/orders/${id}`),
 }
 
-// ─── Leader ───────────────────────────────────────────────────────────────────
+// ── Leader ───────────────────────────────────────────────────────────────────
 
 export interface Leader {
   id: number
-  nickname: string
-  real_name: string
-  phone: string
-  province: string
-  city: string
-  level: number
-  total_sales: number
-  status: number
-  created_at?: string
+  user_id: number
+  community: string
+  district: string
+  address: string
+  pickup_address?: string
+  id_card?: string
+  bank_account?: string
+  bank_name?: string
+  status: string
+  commission_rate: number
+  total_earnings: number
+  total_settled: number
+  created_at: string
 }
 
 export const leaderApi = {
   profile: () => api.get<Leader>('/leader/profile'),
-  updateStatus: (id: number, status: number) =>
+  updateStatus: (id: number, status: string) =>
     api.put(`/leader/${id}/status`, { status }),
-}
-
-// ─── Report / Analytics ───────────────────────────────────────────────────────
-
-export interface ChartDataPoint {
-  date: string
-  value: number
-}
-
-export interface ReportData {
-  daily_active_users: ChartDataPoint[]
-  order_trend: ChartDataPoint[]
-  revenue_trend: ChartDataPoint[]
-}
-
-export const reportApi = {
-  overview: () => api.get<ReportData>('/reports/overview'),
 }
 
 export default api

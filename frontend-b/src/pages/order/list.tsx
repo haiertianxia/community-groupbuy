@@ -163,9 +163,9 @@ export default function OrderList() {
               </View>
               <View className='item-info'>
                 <Text className='item-name'>
-                  {order.activity?.activity_name || `活动 #${order.activity_id}`}
+                  {order.activity?.description || `活动 #${order.activity_id}`}
                 </Text>
-                <Text className='item-price'>¥{order.pay_amount}</Text>
+                <Text className='item-price'>¥{order.total_amount}</Text>
                 <Text className='item-count'>x{order.quantity}</Text>
                 <Text className='item-time'>
                   {new Date(order.created_at).toLocaleString('zh-CN')}

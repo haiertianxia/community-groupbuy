@@ -112,12 +112,12 @@ export default function Checkout() {
       {activity && (
         <View className='activity-summary'>
           <Image
-            src={activity.banner_images?.[0] || activity.image || `https://picsum.photos/200/200?random=${activity.id}`}
+            src={`https://picsum.photos/200/200?random=${activity.id}`}
             mode='aspectFill'
             className='summary-img'
           />
           <View className='summary-info'>
-            <Text className='summary-name' numberOfLines={2}>{activity.name}</Text>
+            <Text className='summary-name' numberOfLines={2}>{activity.product?.name || '团购商品'}</Text>
             <Text className='summary-price'>¥{activity.group_price}</Text>
           </View>
         </View>

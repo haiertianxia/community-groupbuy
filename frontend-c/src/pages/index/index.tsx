@@ -136,11 +136,11 @@ export default function Index() {
         <View className='activity-list'>
           {activities.map((activity) => {
             const { text: statusText, color: statusColor } = getStatusInfo(activity.status)
-            const progress = activity.min_people > 0
-              ? Math.min((activity.current_people / activity.min_people) * 100, 100)
+            const progress = activity.min_participants > 0
+              ? Math.min((activity.current_participants / activity.min_participants) * 100, 100)
               : 0
             const remainTime = getRemainTime(activity.end_time)
-            const coverImage = activity.banner_images?.[0] || activity.image || `https://picsum.photos/300/300?random=${activity.id}`
+            const coverImage = activity.product?.images?.[0] || activity.image || `https://picsum.photos/300/300?random=${activity.id}`
 
             return (
               <Navigator
@@ -155,17 +155,17 @@ export default function Index() {
                   </View>
                 </View>
                 <View className='activity-info'>
-                  <Text className='activity-name' numberOfLines={2}>{activity.name}</Text>
+                  <Text className='activity-name' numberOfLines={2}>{activity.product?.name || '团购商品'}</Text>
                   <View className='activity-price'>
                     <Text className='group-price'>¥{activity.group_price}</Text>
-                    <Text className='original-price'>¥{activity.original_price}</Text>
+                    <Text className='original-price'>¥{activity.product?.original_price || activity.group_price}</Text>
                   </View>
                   <View className='activity-progress'>
                     <View className='progress-bar'>
                       <View className='progress-fill' style={{ width: `${progress}%` }} />
                     </View>
                     <Text className='progress-text'>
-                      {activity.current_people}/{activity.min_people}人
+                      {activity.current_participants}/{activity.min_participants}人
                     </Text>
                   </View>
                   <Text className='activity-time'>{remainTime}</Text>

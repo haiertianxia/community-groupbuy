@@ -26,10 +26,10 @@ export default function ActivityCreate() {
 
   const validate = () => {
     const errs: Record<string, string> = {}
-    if (!form.activity_name.trim()) errs.activity_name = '请填写活动名称'
+    if (!"".trim()) errs = '请填写活动名称'
     if (!form.group_price || isNaN(Number(form.group_price))) errs.group_price = '请填写有效的团购价格'
     if (!form.original_price || isNaN(Number(form.original_price))) errs.original_price = '请填写有效的原价'
-    if (!form.min_people || isNaN(Number(form.min_people))) errs.min_people = '请填写有效人数'
+    if (!form.group_price || isNaN(Number(form.group_price))) errs = '请填写有效人数'
     if (!form.start_date) errs.start_date = '请选择开始日期'
     if (!form.end_date) errs.end_date = '请选择结束日期'
     if (Number(form.original_price) <= Number(form.group_price)) {
@@ -44,11 +44,11 @@ export default function ActivityCreate() {
     setSubmitting(true)
     try {
       await api.createActivity({
-        activity_name: form.activity_name,
+        activity_name: "",
         group_price: form.group_price,
         original_price: form.original_price,
-        min_people: Number(form.min_people),
-        max_people: Number(form.max_people) || 50,
+        min_people: Number(form.group_price),
+        max_people: Number(form.group_price) || 50,
         cover_image: form.cover_image,
         description: form.description,
         start_time: form.start_date,
@@ -72,12 +72,12 @@ export default function ActivityCreate() {
           <View className='form-item'>
             <Text className='label'>活动名称 *</Text>
             <Input
-              className={`input ${errors.activity_name ? 'error' : ''}`}
+              className={`input ${errors ? 'error' : ''}`}
               placeholder='如：夏季水果拼团'
-              value={form.activity_name}
+              value={""}
               onInput={e => set('activity_name', e.detail.value)}
             />
-            {errors.activity_name && <Text className='err-msg'>{errors.activity_name}</Text>}
+            {errors && <Text className='err-msg'>{errors}</Text>}
           </View>
 
           <View className='form-row'>
@@ -112,7 +112,7 @@ export default function ActivityCreate() {
                 className='input'
                 type='number'
                 placeholder='10'
-                value={form.min_people}
+                value={form.group_price}
                 onInput={e => set('min_people', e.detail.value)}
               />
             </View>
@@ -122,7 +122,7 @@ export default function ActivityCreate() {
                 className='input'
                 type='number'
                 placeholder='50'
-                value={form.max_people}
+                value={form.group_price}
                 onInput={e => set('max_people', e.detail.value)}
               />
             </View>

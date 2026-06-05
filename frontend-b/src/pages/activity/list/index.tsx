@@ -101,7 +101,7 @@ export default function ActivityList() {
             </View>
             <View className='act-body'>
               <View className='act-name-row'>
-                <Text className='act-name'>{act.activity_name}</Text>
+                <Text className='act-name'>{act.description || '团购活动'}</Text>
                 <View
                   className='status-tag'
                   style={{
@@ -125,11 +125,11 @@ export default function ActivityList() {
                 <View className='progress-bar'>
                   <View
                     className='progress-fill'
-                    style={{ width: `${Math.min(100, (act.current_people / act.min_people) * 100)}%` }}
+                    style={{ width: `${Math.min(100, (act.current_participants / act.min_participants) * 100)}%` }}
                   />
                 </View>
                 <Text className='progress-text'>
-                  {act.current_people}/{act.min_people}人 (最低)
+                  {act.current_participants}/{act.min_participants}人 (最低)
                 </Text>
               </View>
             </View>

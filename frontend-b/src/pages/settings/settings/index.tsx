@@ -24,13 +24,13 @@ export default function SettingsPage() {
       .then(l => {
         setLeader(l)
         setForm({
-          nickname: l.nickname || '',
+          nickname: l.community || '',
           phone: l.phone || '',
-          province: l.province || '',
-          city: l.city || '',
+          province: l.district || '',
+          city: l.district || '',
           district: l.district || '',
           pickup_address: l.pickup_address || '',
-          pickup_hours: l.pickup_hours || '',
+          pickup_hours: l.pickup_address || '',
         })
       })
       .catch(() => {})
@@ -43,7 +43,7 @@ export default function SettingsPage() {
   }
 
   const handleSave = async () => {
-    if (!form.nickname.trim()) {
+    if (!form.community.trim()) {
       Taro.showToast({ title: '请填写昵称', icon: 'none' })
       return
     }
@@ -92,9 +92,9 @@ export default function SettingsPage() {
         <View className='profile-avatar'>
           <Text className='avatar-emoji'>👤</Text>
         </View>
-        <Text className='profile-nickname'>{leader?.nickname || '团长'}</Text>
-        {leader?.province && (
-          <Text className='profile-location'>{leader.province} {leader.city}</Text>
+        <Text className='profile-nickname'>{leader?.community || '团长'}</Text>
+        {leader?.community && (
+          <Text className='profile-location'>{leader.district} {leader.district}</Text>
         )}
       </View>
 
@@ -107,7 +107,7 @@ export default function SettingsPage() {
           <Input
             className='form-input'
             placeholder='请输入昵称'
-            value={form.nickname}
+            value={form.community}
             onInput={e => setField('nickname', e.detail.value)}
           />
         </View>
@@ -128,7 +128,7 @@ export default function SettingsPage() {
           <Input
             className='form-input'
             placeholder='如：广东省'
-            value={form.province}
+            value={form.district}
             onInput={e => setField('province', e.detail.value)}
           />
         </View>
@@ -139,7 +139,7 @@ export default function SettingsPage() {
             <Input
               className='form-input'
               placeholder='如：深圳市'
-              value={form.city}
+              value={form.district}
               onInput={e => setField('city', e.detail.value)}
             />
           </View>
@@ -173,7 +173,7 @@ export default function SettingsPage() {
           <Input
             className='form-input'
             placeholder='如：09:00-21:00'
-            value={form.pickup_hours}
+            value={form.pickup_address}
             onInput={e => setField('pickup_hours', e.detail.value)}
           />
         </View>
