@@ -1,156 +1,160 @@
-import { Component, reactive, onMounted } from 'react'
-import { View, Text, Image, Navigator } from '@tarojs/components'
-import Taro from '@tarojs/taro'
-import { api, User } from '../../api/client'
+import { useState, useEffect } from 'react'
+import { View, Text, Image, Navigator, Button } from '@tarojs/components'
+import Taro, { usePullDownRefresh } from '@tarojs/taro'
+import { api, User, Order } from '../../api/client'
+import { useAuthStore } from '../../store/auth'
 import './index.css'
 
-const MENU_GROUPS = [
-  [
-    { id: 'orders', label: '我的订单', icon: '📋', url: '/pages/order/order' },
-    { id: 'favorites', label: '我的收藏', icon: '❤️', url: '/pages/favorites/favorites' },
-    { id: 'coupons', label: '优惠券', icon: '🎫', url: '/pages/coupons/coupons' },
-    { id: 'points', label: '我的积分', icon: '⭐', url: '/pages/points/points' },
-  ],
-  [
-    { id: 'addresses', label: '收货地址', icon: '📍', url: '/pages/address/address' },
-    { id: 'invoices', label: '发票管理', icon: '🧾', url: '/pages/invoices/invoices' },
-    { id: 'help', label: '帮助中心', icon: '❓', url: '/pages/help/help' },
-    { id: 'settings', label: '设置', icon: '⚙️', url: '/pages/settings/settings' },
-  ],
+const MENU_GROUP_1 = [
+  { id: 'pending_payment', label: '待支付', icon: '⏰', count: 0 },
+  { id: 'paid', label: '待发货', icon: '📦', count: 0 },
+  { id: 'shipped', label: '待收货', icon: '🚚', count: 0 },
+  { id: 'completed', label: '已完成', icon: '✅', count: 0 },
+]
+
+const MENU_GROUP_2 = [
+  { id: 'addresses', label: '收货地址', icon: '📍', url: '/pages/address/address' },
+  { id: 'leader', label: '申请团长', icon: '👑', url: '/pages/leader/leader' },
+  { id: 'help', label: '帮助中心', icon: '❓', url: '/pages/help/help' },
+  { id: 'settings', label: '设置', icon: '⚙️', url: '/pages/settings/settings' },
 ]
 
 export default function UserProfile() {
-  const state = reactive({
-    user: null as User | null,
-    stats: {
-      pendingPay: 0,
-      pendingShip: 0,
-      pendingReceive: 0,
-      completed: 0,
-    },
-    loading: false,
+  const { user, isLoggedIn, logout, checkAuth } = useAuthStore()
+  const [stats, setStats] = useState({
+    pending_payment: 0,
+    paid: 0,
+    shipped: 0,
+    completed: 0,
+  })
+  const [loading, setLoading] = useState(false)
+  const [isLeader, setIsLeader] = useState(false)
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      loadProfile()
+    }
+  }, [isLoggedIn])
+
+  usePullDownRefresh(() => {
+    if (isLoggedIn) {
+      loadProfile().finally(() => Taro.stopPullDownRefresh())
+    } else {
+      Taro.stopPullDownRefresh()
+    }
   })
 
   const loadProfile = async () => {
+    setLoading(true)
     try {
-      state.loading = true
-      const [user, orders] = await Promise.all([
-        api.getProfile(),
-        api.getOrders({ page: 1, page_size: 100 }),
+      const [me, ordersData] = await Promise.all([
+        api.getMe(),
+        api.getOrders({ page: 1, page_size: 100 }).catch(() => ({ items: [] as Order[] })),
+        api.getLeaderProfile().catch(() => null),
       ])
-      state.user = user
-      state.stats.pendingPay = orders.list.filter((o) => o.status === 0).length
-      state.stats.pendingShip = orders.list.filter((o) => o.status === 1).length
-      state.stats.pendingReceive = orders.list.filter((o) => o.status === 2).length
-      state.stats.completed = orders.list.filter((o) => o.status === 4).length
+
+      const orders = ordersData.items || []
+      setStats({
+        pending_payment: orders.filter(o => o.status === 'pending_payment').length,
+        paid: orders.filter(o => o.status === 'paid').length,
+        shipped: orders.filter(o => o.status === 'shipped').length,
+        completed: orders.filter(o => o.status === 'completed').length,
+      })
     } catch (e) {
       console.error(e)
-      // Not logged in - show login prompt
     } finally {
-      state.loading = false
+      setLoading(false)
     }
   }
 
-  onMounted(() => {
-    loadProfile()
-  })
-
-  const handleLogin = async () => {
-    try {
-      const loginRes = await Taro.login()
-      if (loginRes.code) {
-        const result = await api.login(loginRes.code)
-        api.setToken(result.token)
-        Taro.setStorageSync('refresh_token', result.refresh_token)
-        loadProfile()
-        Taro.showToast({ title: '登录成功', icon: 'success' })
-      }
-    } catch (e) {
-      Taro.showToast({ title: '登录失败', icon: 'none' })
-    }
+  const handleLogout = async () => {
+    const { confirm } = await Taro.showModal({
+      title: '确认退出登录?',
+      content: '',
+    })
+    if (confirm) logout()
   }
+
+  const menuWithStats = MENU_GROUP_1.map(item => ({
+    ...item,
+    count: stats[item.id as keyof typeof stats] || 0,
+  }))
 
   return (
     <View className='user-page'>
       {/* Profile Header */}
       <View className='profile-header'>
         <View className='profile-bg' />
-        {state.user ? (
+        {isLoggedIn && user ? (
           <View className='profile-content'>
             <Image
-              src={state.user.avatar || 'https://picsum.photos/120/120?random=avatar'}
+              src='https://picsum.photos/120/120?random=avatar'
               className='avatar'
             />
             <View className='profile-info'>
-              <Text className='nickname'>{state.user.nickname || '用户' + state.user.id}</Text>
-              <View className='level-tag'>
-                <Text>V{state.user.level}</Text>
-              </View>
+              <Text className='nickname'>{user.username || '用户' + user.id}</Text>
+              <Text className='user-email'>{user.email}</Text>
+            </View>
+            <View className='logout-btn' onClick={handleLogout}>
+              <Text>退出</Text>
             </View>
           </View>
         ) : (
-          <View className='profile-content login-prompt' onClick={handleLogin}>
+          <View
+            className='profile-content login-prompt'
+            onClick={() => Taro.navigateTo({ url: '/pages/login/login' })}
+          >
             <Image src='https://picsum.photos/120/120?random=default' className='avatar' />
-            <Text className='login-text'>点击登录</Text>
+            <Text className='login-text'>点击登录 / 注册</Text>
           </View>
         )}
       </View>
 
-      {/* Stats */}
-      {state.user && (
+      {/* Order Stats */}
+      {isLoggedIn && (
         <View className='stats-section'>
-          <Navigator url='/pages/order/order' className='stat-item'>
-            <Text className='stat-num'>{state.stats.pendingPay}</Text>
-            <Text className='stat-label'>待支付</Text>
-          </Navigator>
-          <Navigator url='/pages/order/order' className='stat-item'>
-            <Text className='stat-num'>{state.stats.pendingShip}</Text>
-            <Text className='stat-label'>待发货</Text>
-          </Navigator>
-          <Navigator url='/pages/order/order' className='stat-item'>
-            <Text className='stat-num'>{state.stats.pendingReceive}</Text>
-            <Text className='stat-label'>待收货</Text>
-          </Navigator>
-          <Navigator url='/pages/order/order' className='stat-item'>
-            <Text className='stat-num'>{state.stats.completed}</Text>
-            <Text className='stat-label'>已完成</Text>
-          </Navigator>
+          {menuWithStats.map(item => (
+            <Navigator
+              key={item.id}
+              url={`/pages/order/order?status=${item.id}`}
+              className='stat-item'
+            >
+              <Text className='stat-num'>{item.count}</Text>
+              <Text className='stat-label'>{item.label}</Text>
+            </Navigator>
+          ))}
         </View>
       )}
 
-      {/* Member Card */}
-      {state.user && (
-        <View className='member-card'>
+      {/* Member Banner */}
+      {isLoggedIn && (
+        <View className='member-banner'>
           <View className='member-left'>
-            <Text className='member-title'>会员积分</Text>
-            <Text className='member-points'>{state.user.available_points} 积分</Text>
+            <Text className='member-title'>成为团长</Text>
+            <Text className='member-subtitle'>分享赚佣金，轻松副业</Text>
           </View>
-          <View className='member-right'>
-            <Text className='growth-label'>成长值</Text>
-            <View className='growth-bar'>
-              <View className='growth-fill' style={{ width: `${(state.user.growth_value % 1000) / 10}%` }} />
-            </View>
-            <Text className='growth-value'>{state.user.growth_value}</Text>
-          </View>
+          <Navigator url='/pages/leader/leader' className='member-apply-btn'>
+            <Text>立即申请</Text>
+          </Navigator>
         </View>
       )}
 
-      {/* Menu Groups */}
+      {/* Menu */}
       <View className='menu-section'>
-        {MENU_GROUPS.map((group, gi) => (
-          <View key={gi} className='menu-group'>
-            {group.map((item) => (
-              <Navigator key={item.id} url={item.url} className='menu-item'>
-                <Text className='menu-icon'>{item.icon}</Text>
-                <Text className='menu-label'>{item.label}</Text>
-                <Text className='menu-arrow'>›</Text>
-              </Navigator>
-            ))}
-          </View>
+        {MENU_GROUP_2.map(item => (
+          <Navigator
+            key={item.id}
+            url={item.url}
+            className='menu-item'
+          >
+            <Text className='menu-icon'>{item.icon}</Text>
+            <Text className='menu-label'>{item.label}</Text>
+            <Text className='menu-arrow'>›</Text>
+          </Navigator>
         ))}
       </View>
 
-      {/* Customer Service */}
+      {/* Actions */}
       <View className='service-section'>
         <Button className='service-btn' open-type='contact'>
           <Text>在线客服</Text>
@@ -158,6 +162,10 @@ export default function UserProfile() {
         <Button className='service-btn' open-type='feedback'>
           <Text>意见反馈</Text>
         </Button>
+      </View>
+
+      <View className='version-info'>
+        <Text>社区团购 v1.0.0</Text>
       </View>
     </View>
   )

@@ -1,34 +1,8 @@
-# Go
-vendor/
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-*.test
-*.out
+__pycache__/
+*.pyc
+venv/
 .env
-go.work
-
-# Node
 node_modules/
 dist/
-build/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-
-# Python
-__pycache__/
-*.py[cod]
-venv/
-*.egg-info/
-
-# Logs
-*.log
-
-# Database
+.cache/
 *.db
-*.sqlite

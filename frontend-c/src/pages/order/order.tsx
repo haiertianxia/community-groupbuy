@@ -1,171 +1,215 @@
-import { Component, reactive, onMounted } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { View, Text, Image, ScrollView, Navigator } from '@tarojs/components'
-import Taro from '@tarojs/taro'
+import Taro, { useReachBottom, usePullDownRefresh } from '@tarojs/taro'
 import { api, Order } from '../../api/client'
 import './index.css'
 
-const STATUS_MAP: Record<number, { text: string; color: string }> = {
-  0: { text: '待支付', color: '#ff6b35' },
-  1: { text: '待发货', color: '#1890ff' },
-  2: { text: '待收货', color: '#1890ff' },
-  3: { text: '待确认', color: '#faad14' },
-  4: { text: '已完成', color: '#52c41a' },
-  5: { text: '已取消', color: '#999' },
-  6: { text: '退款中', color: '#faad14' },
-  7: { text: '已退款', color: '#999' },
+const TABS = [
+  { key: 'all', label: '全部' },
+  { key: 'pending_payment', label: '待支付' },
+  { key: 'paid', label: '待发货' },
+  { key: 'shipped', label: '待收货' },
+  { key: 'completed', label: '已完成' },
+]
+
+const STATUS_INFO: Record<string, { text: string; color: string }> = {
+  pending_payment: { text: '待支付', color: '#ff6b35' },
+  paid: { text: '待发货', color: '#1890ff' },
+  shipped: { text: '待收货', color: '#1890ff' },
+  confirmed: { text: '待确认', color: '#faad14' },
+  completed: { text: '已完成', color: '#52c41a' },
+  cancelled: { text: '已取消', color: '#999' },
+  refund_pending: { text: '退款中', color: '#faad14' },
+  refunded: { text: '已退款', color: '#999' },
 }
 
-const TABS = ['全部', '待支付', '待发货', '待收货', '已完成']
-
 export default function OrderList() {
-  const state = reactive({
-    orders: [] as Order[],
-    loading: false,
-    page: 1,
-    hasMore: true,
-    currentTab: 0,
-  })
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const [currentTab, setCurrentTab] = useState('all')
 
-  const statusMap: Record<number, number> = { 0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: -1 }
-
-  const loadOrders = async () => {
-    if (state.loading || !state.hasMore) return
-    state.loading = true
+  const loadOrders = useCallback(async (reset = false) => {
+    if (loading) return
+    const currentPage = reset ? 1 : page
+    setLoading(true)
     try {
-      const res = await api.getOrders({
-        page: state.page,
-        page_size: 10,
-        status: state.currentTab === 0 ? undefined : TABS[state.currentTab] === '待支付' ? 0 :
-          TABS[state.currentTab] === '待发货' ? 1 :
-          TABS[state.currentTab] === '待收货' ? 2 :
-          TABS[state.currentTab] === '已完成' ? 4 : undefined,
-      })
-      if (state.page === 1) {
-        state.orders = res.list
-      } else {
-        state.orders = [...state.orders, ...res.list]
-      }
-      state.hasMore = res.list.length === 10
-      state.page++
+      const res = await api.getOrders({ page: currentPage, page_size: 10 })
+      const items = res.items || []
+      setOrders(prev => reset ? items : [...prev, ...items])
+      setHasMore(items.length === 10)
+      setPage(currentPage + 1)
     } catch (e) {
       console.error(e)
     } finally {
-      state.loading = false
+      setLoading(false)
     }
+  }, [loading, page])
+
+  const resetAndLoad = () => {
+    setOrders([])
+    setPage(1)
+    setHasMore(true)
+    loadOrders(true)
   }
 
-  onMounted(() => {
-    loadOrders()
+  useEffect(() => {
+    resetAndLoad()
+  }, [currentTab])
+
+  usePullDownRefresh(() => {
+    resetAndLoad().finally(() => Taro.stopPullDownRefresh())
   })
 
-  const switchTab = (index: number) => {
-    state.currentTab = index
-    state.orders = []
-    state.page = 1
-    state.hasMore = true
-    loadOrders()
+  useReachBottom(() => {
+    if (!loading && hasMore) loadOrders(false)
+  })
+
+  const switchTab = (key: string) => {
+    if (key === currentTab) return
+    setCurrentTab(key)
   }
 
-  const handleCancel = async (orderId: number) => {
-    const res = await Taro.showModal({ title: '确认取消订单?', content: '' })
-    if (res.confirm) {
-      try {
-        await api.cancelOrder(orderId)
-        Taro.showToast({ title: '已取消', icon: 'success' })
-        loadOrders()
-      } catch (e: any) {
-        Taro.showToast({ title: e.message, icon: 'none' })
-      }
+  const getFilteredOrders = () => {
+    if (currentTab === 'all') return orders
+    return orders.filter(o => o.status === currentTab)
+  }
+
+  const handleCancel = async (orderId: number, e: any) => {
+    e.stopPropagation()
+    const { confirm } = await Taro.showModal({
+      title: '确认取消订单?',
+      content: '',
+    })
+    if (!confirm) return
+    try {
+      await api.updateOrderStatus(orderId, { status: 'cancelled' })
+      Taro.showToast({ title: '已取消', icon: 'success' })
+      resetAndLoad()
+    } catch (err: any) {
+      Taro.showToast({ title: err.message || '操作失败', icon: 'none' })
     }
   }
 
-  const handleRefund = async (orderId: number) => {
+  const handleConfirm = async (orderId: number, e: any) => {
+    e.stopPropagation()
+    const { confirm } = await Taro.showModal({
+      title: '确认收货?',
+      content: '请确认已收到商品',
+    })
+    if (!confirm) return
     try {
-      await api.refundOrder(orderId, '不想要了')
-      Taro.showToast({ title: '退款申请已提交', icon: 'success' })
-      loadOrders()
-    } catch (e: any) {
-      Taro.showToast({ title: e.message, icon: 'none' })
-    }
-  }
-
-  const handleConfirm = async (orderId: number) => {
-    try {
-      await api.confirmOrder(orderId)
+      await api.updateOrderStatus(orderId, { status: 'completed' })
       Taro.showToast({ title: '已确认收货', icon: 'success' })
-      loadOrders()
-    } catch (e: any) {
-      Taro.showToast({ title: e.message, icon: 'none' })
+      resetAndLoad()
+    } catch (err: any) {
+      Taro.showToast({ title: err.message || '操作失败', icon: 'none' })
     }
   }
+
+  const filteredOrders = getFilteredOrders()
 
   return (
     <View className='order-page'>
       {/* Tabs */}
-      <ScrollView scrollX className='tabs'>
-        {TABS.map((tab, index) => (
+      <View className='tabs'>
+        {TABS.map(tab => (
           <View
-            key={index}
-            className={`tab ${state.currentTab === index ? 'active' : ''}`}
-            onClick={() => switchTab(index)}
+            key={tab.key}
+            className={`tab ${currentTab === tab.key ? 'active' : ''}`}
+            onClick={() => switchTab(tab.key)}
           >
-            {tab}
+            <Text>{tab.label}</Text>
           </View>
         ))}
-      </ScrollView>
+      </View>
 
       {/* Order List */}
-      <ScrollView scrollY className='order-list' onScrollToLower={loadOrders}>
-        {state.orders.length === 0 && !state.loading && (
-          <View className='empty'>
-            <Text>暂无订单</Text>
-            <Navigator url='/pages/index/index' className='go-shop'>去逛逛</Navigator>
+      <ScrollView scrollY className='order-list'>
+        {filteredOrders.length === 0 && !loading && (
+          <View className='empty-state'>
+            <Text className='empty-text'>暂无订单</Text>
+            <Navigator url='/pages/index/index' className='go-shop-btn'>
+              <Text>去逛逛</Text>
+            </Navigator>
           </View>
         )}
 
-        {state.orders.map((order) => {
-          const statusInfo = STATUS_MAP[order.status] || { text: '未知', color: '#999' }
+        {filteredOrders.map(order => {
+          const info = STATUS_INFO[order.status] || { text: order.status, color: '#999' }
+          const activity = order.activity
+          const coverImage = activity?.banner_images?.[0] || activity?.product?.image || `https://picsum.photos/120/120?random=${order.id}`
+
           return (
-            <Navigator key={order.id} url={`/pages/order/order?id=${order.id}`} className='order-card'>
+            <Navigator
+              key={order.id}
+              url={`/pages/order/order?id=${order.id}`}
+              className='order-card'
+            >
               <View className='order-header'>
-                <Text className='order-no'>订单号: {order.order_no}</Text>
-                <Text className='order-status' style={{ color: statusInfo.color }}>{statusInfo.text}</Text>
+                <Text className='order-no'>订单号: {order.id}</Text>
+                <Text className='order-status' style={{ color: info.color }}>{info.text}</Text>
               </View>
 
               <View className='order-items'>
-                <View className='item'>
-                  <Image src='https://picsum.photos/120/120' mode='aspectFill' className='item-img' />
-                  <View className='item-info'>
-                    <Text className='item-name'>团购商品</Text>
-                    <Text className='item-price'>¥{order.pay_amount}</Text>
-                    <Text className='item-time'>{new Date(order.created_at).toLocaleDateString()}</Text>
-                  </View>
+                <Image src={coverImage} mode='aspectFill' className='item-img' />
+                <View className='item-info'>
+                  <Text className='item-name' numberOfLines={2}>
+                    {activity?.name || '团购商品'}
+                  </Text>
+                  <Text className='item-price'>¥{order.pay_amount}</Text>
+                  <Text className='item-time'>
+                    {new Date(order.created_at).toLocaleDateString()}
+                  </Text>
+                </View>
+                <View className='item-qty'>
+                  <Text className='qty-label'>x{order.quantity}</Text>
                 </View>
               </View>
 
+              {/* Actions */}
               <View className='order-footer'>
-                {order.status === 0 && (
+                {order.status === 'pending_payment' && (
                   <View className='action-row'>
-                    <View className='btn btn-cancel' onClick={(e) => { e.stopPropagation(); handleCancel(order.id) }}>
+                    <View
+                      className='btn btn-outline'
+                      onClick={(e: any) => { e.stopPropagation(); handleCancel(order.id, e) }}
+                    >
                       取消订单
                     </View>
-                    <View className='btn btn-primary'>去支付</View>
+                    <Navigator
+                      url={`/pages/checkout/checkout?orderId=${order.id}`}
+                      className='btn btn-primary'
+                      onClick={(e: any) => e.stopPropagation()}
+                    >
+                      去支付
+                    </Navigator>
                   </View>
                 )}
-                {order.status === 2 && (
+                {order.status === 'shipped' && (
                   <View className='action-row'>
-                    <View className='btn btn-default' onClick={(e) => { e.stopPropagation(); handleRefund(order.id) }}>
-                      申请退款
-                    </View>
-                    <View className='btn btn-primary' onClick={(e) => { e.stopPropagation(); handleConfirm(order.id) }}>
+                    {order.tracking_number && (
+                      <Text className='tracking-info'>运单号: {order.tracking_number}</Text>
+                    )}
+                    <View
+                      className='btn btn-primary'
+                      onClick={(e: any) => { e.stopPropagation(); handleConfirm(order.id, e) }}
+                    >
                       确认收货
                     </View>
                   </View>
                 )}
-                {order.status === 4 && (
+                {order.status === 'completed' && (
                   <View className='action-row'>
-                    <View className='btn btn-default'>删除订单</View>
-                    <View className='btn btn-primary'>再次购买</View>
+                    <View className='btn btn-outline'>再次购买</View>
+                    <Navigator
+                      url={`/pages/activity/activity?id=${order.activity_id}`}
+                      className='btn btn-primary'
+                      onClick={(e: any) => e.stopPropagation()}
+                    >
+                      再来一单
+                    </Navigator>
                   </View>
                 )}
               </View>
@@ -173,8 +217,9 @@ export default function OrderList() {
           )
         })}
 
-        {state.loading && (
-          <View className='loading'><Text>加载中...</Text></View>
+        {loading && <View className='loading-tip'><Text>加载中...</Text></View>}
+        {!hasMore && filteredOrders.length > 0 && (
+          <View className='loading-tip'><Text>— 没有更多了 —</Text></View>
         )}
       </ScrollView>
     </View>

@@ -9,7 +9,11 @@
     "pages/activity/activity",
     "pages/checkout/checkout",
     "pages/address/address",
-    "pages/address/edit"
+    "pages/address/edit/edit",
+    "pages/login/login",
+    "pages/leader/leader",
+    "pages/settings/settings",
+    "pages/help/help"
   ],
   "window": {
     "backgroundTextStyle": "light",

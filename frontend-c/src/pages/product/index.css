@@ -1,0 +1,130 @@
+.product-page {
+  min-height: 100vh;
+  background: #f5f5f5;
+  padding-bottom: 120px;
+}
+
+.product-scroll {
+  height: calc(100vh - 120px);
+}
+
+.image-section {
+  background: #fff;
+}
+.product-image {
+  width: 100%;
+  display: block;
+}
+
+.info-section {
+  background: #fff;
+  padding: 24px;
+  margin-bottom: 16px;
+}
+.price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.sale-price {
+  font-size: 48px;
+  color: #ff6b35;
+  font-weight: 700;
+}
+.orig-price {
+  font-size: 28px;
+  color: #999;
+  text-decoration: line-through;
+}
+.product-name {
+  font-size: 32px;
+  font-weight: 600;
+  color: #333;
+  line-height: 1.4;
+  margin-bottom: 16px;
+}
+.product-meta {
+  display: flex;
+  gap: 24px;
+}
+.meta-text {
+  font-size: 24px;
+  color: #999;
+}
+
+.desc-section {
+  background: #fff;
+  padding: 24px;
+  margin-bottom: 16px;
+}
+.section-title {
+  font-size: 30px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 16px;
+  display: block;
+}
+.desc-text {
+  font-size: 28px;
+  color: #666;
+  line-height: 1.6;
+}
+
+.loading-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-size: 28px;
+  color: #999;
+}
+
+.bottom-spacer {
+  height: 60px;
+}
+
+.bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+  z-index: 100;
+}
+.action-btns {
+  display: flex;
+  gap: 8px;
+}
+.action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 16px;
+}
+.action-icon {
+  font-size: 40px;
+}
+.action-label {
+  font-size: 20px;
+  color: #666;
+  margin-top: 2px;
+}
+.buy-btn {
+  flex: 1;
+  height: 88px !important;
+  line-height: 88px !important;
+  background: #ff6b35 !important;
+  color: #fff !important;
+  border-radius: 44px !important;
+  font-size: 30px !important;
+  font-weight: 600 !important;
+}

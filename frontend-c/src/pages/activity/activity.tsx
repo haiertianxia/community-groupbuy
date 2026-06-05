@@ -1,203 +1,347 @@
-import { Component, reactive, onLoad } from 'react'
-import { View, Text, Image, Button, ScrollView } from '@tarojs/components'
-import { useDidShow } from '@tarojs/taro'
-import { api, Activity, Address, WechatPayParams } from '../../api/client'
+import { useState, useEffect } from 'react'
+import { View, Text, Image, Button, ScrollView, Navigator } from '@tarojs/components'
+import Taro from '@tarojs/taro'
+import { api, Activity, Order } from '../../api/client'
+import { useAuthStore } from '../../store/auth'
 import './index.css'
 
+function getStatusText(status: string): string {
+  const map: Record<string, string> = {
+    pending: '预热中',
+    active: '进行中',
+    completed: '已成团',
+    closed: '已截团',
+  }
+  return map[status] || status
+}
+
+function getRemainTime(endTime: string): string {
+  if (!endTime) return ''
+  const diff = new Date(endTime).getTime() - Date.now()
+  if (diff <= 0) return '已结束'
+  const days = Math.floor(diff / 86400000)
+  if (days > 0) return `剩余 ${days} 天`
+  const hours = Math.floor(diff / 3600000)
+  return `剩余 ${hours} 小时`
+}
+
 export default function ActivityDetail() {
-  const state = reactive({
-    activity: null as Activity | null,
-    addresses: [] as Address[],
-    selectedAddress: null as Address | null,
-    payParams: null as WechatPayParams | null,
-    orderId: 0,
-    loading: false,
-    joining: false,
-    showPayModal: false,
-  })
+  const [activity, setActivity] = useState<Activity | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [joining, setJoining] = useState(false)
+
+  // Form state
+  const [receiverName, setReceiverName] = useState('')
+  const [receiverPhone, setReceiverPhone] = useState('')
+  const [address, setAddress] = useState('')
+  const [quantity, setQuantity] = useState(1)
+  const [deliveryType, setDeliveryType] = useState<'pickup' | 'delivery'>('pickup')
+
+  const { isLoggedIn } = useAuthStore()
 
   let activityId = 0
 
+  useEffect(() => {
+    const pages = Taro.getCurrentPages()
+    const current = pages[pages.length - 1]
+    const id = (current as any)?.options?.id
+    activityId = Number(id)
+    if (activityId) loadData()
+  }, [])
+
   const loadData = async () => {
+    setLoading(true)
     try {
-      state.loading = true
-      const [activity, addresses] = await Promise.all([
-        api.getActivity(activityId),
-        api.getAddresses(),
-      ])
-      state.activity = activity
-      state.addresses = addresses
-      state.selectedAddress = addresses.find((a) => a.is_default) || addresses[0] || null
+      const data = await api.getActivity(activityId)
+      setActivity(data)
     } catch (e) {
       console.error(e)
+      Taro.showToast({ title: '加载失败', icon: 'none' })
     } finally {
-      state.loading = false
+      setLoading(false)
     }
   }
 
-  useDidShow(() => {
-    const app = getApp<any>()
-    activityId = app.$router?.params?.id || 0
-    if (activityId) loadData()
-  })
-
   const handleJoin = async () => {
-    if (!state.selectedAddress) {
-      wx.showToast({ title: '请选择收货地址', icon: 'none' })
+    if (!isLoggedIn) {
+      Taro.navigateTo({ url: '/pages/login/login' })
+      return
+    }
+    if (!receiverName.trim()) {
+      Taro.showToast({ title: '请填写收货人姓名', icon: 'none' })
+      return
+    }
+    if (!receiverPhone.trim() || !/^1[3-9]\d{9}$/.test(receiverPhone)) {
+      Taro.showToast({ title: '请填写正确的手机号', icon: 'none' })
+      return
+    }
+    if (!address.trim()) {
+      Taro.showToast({ title: '请填写收货地址', icon: 'none' })
       return
     }
 
+    setJoining(true)
     try {
-      state.joining = true
-      const result = await api.joinActivity(activityId, state.selectedAddress.id)
-      state.orderId = result.order_id
-      state.payParams = result.payment_params
+      const order: Order = await api.createOrder({
+        activity_id: activityId,
+        quantity,
+        receiver_name: receiverName.trim(),
+        receiver_phone: receiverPhone.trim(),
+        address: address.trim(),
+        delivery_type: deliveryType,
+      })
 
-      if (result.payment_params) {
-        // Call WeChat Pay
-        wx.requestPayment({
-          ...result.payment_params,
-          success: async () => {
-            wx.showToast({ title: '支付成功', icon: 'success' })
-            wx.navigateTo({ url: `/pages/order/order` })
-          },
-          fail: (err) => {
-            wx.showToast({ title: '支付取消', icon: 'none' })
-            // Cancel the order
-            api.cancelOrder(result.order_id)
-          },
-        })
-      } else {
-        // Demo mode - no payment integration
-        await api.payOrder(result.order_id, 'DEMO_' + Date.now())
-        wx.showToast({ title: '下单成功', icon: 'success' })
-        wx.navigateTo({ url: `/pages/order/order` })
-      }
+      Taro.showToast({ title: '参团成功', icon: 'success' })
+      // Navigate to order detail
+      Taro.redirectTo({ url: `/pages/order/order?id=${order.id}` })
     } catch (e: any) {
-      wx.showToast({ title: e.message || '参团失败', icon: 'none' })
+      Taro.showToast({ title: e.message || '参团失败', icon: 'none' })
     } finally {
-      state.joining = false
+      setJoining(false)
     }
   }
 
-  if (!state.activity) {
-    return <View className='loading-page'><Text>加载中...</Text></View>
+  if (loading) {
+    return (
+      <View className='loading-page'>
+        <Text>加载中...</Text>
+      </View>
+    )
   }
 
-  const a = state.activity
-  const progress = Math.min((a.current_people / a.min_people) * 100, 100)
-  const remainDays = Math.max(0, Math.ceil((new Date(a.end_time).getTime() - Date.now()) / 86400000))
-  const remainHours = Math.max(0, Math.ceil((new Date(a.end_time).getTime() - Date.now()) / 3600000))
-  const discount = a.original_price > 0 ? ((Number(a.original_price) - Number(a.group_price)) / Number(a.original_price) * 100).toFixed(0) : 0
+  if (!activity) {
+    return (
+      <View className='loading-page'>
+        <Text>活动不存在</Text>
+      </View>
+    )
+  }
+
+  const a = activity
+  const progress = a.min_people > 0
+    ? Math.min((a.current_people / a.min_people) * 100, 100)
+    : 0
+  const discount = a.original_price > 0 && a.group_price > 0
+    ? ((a.original_price - a.group_price) / a.original_price * 100).toFixed(0)
+    : '0'
+  const coverImage = a.banner_images?.[0] || a.image || `https://picsum.photos/750/500?random=${a.id}`
 
   return (
-    <ScrollView scrollY className='activity-page'>
-      {/* Cover */}
-      <View className='cover-section'>
-        <Image
-          src={a.banner_images?.[0] || 'https://picsum.photos/750/500'}
-          mode='aspectFill'
-          className='cover-image'
-        />
-        <View className='cover-overlay'>
-          <View className='price-tag'>
-            <Text className='group-price'>¥{a.group_price}</Text>
-            <Text className='original-price'>¥{a.original_price}</Text>
-          </View>
-          {discount > 0 && (
-            <View className='discount-tag'>
-              <Text>省{Math.round(Number(a.original_price) - Number(a.group_price))}元</Text>
+    <View className='activity-page'>
+      <ScrollView scrollY className='activity-scroll'>
+
+        {/* Cover */}
+        <View className='cover-section'>
+          <Image src={coverImage} mode='aspectFill' className='cover-image' />
+          <View className='cover-overlay'>
+            <View className='price-tag'>
+              <Text className='group-price'>¥{a.group_price}</Text>
+              <Text className='original-price'>¥{a.original_price}</Text>
             </View>
+            {Number(discount) > 0 && (
+              <View className='discount-tag'>
+                <Text>省{Math.round(a.original_price - a.group_price)}元</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Activity Info */}
+        <View className='info-section'>
+          <Text className='activity-name'>{a.name}</Text>
+          {a.description && (
+            <Text className='activity-desc'>{a.description}</Text>
           )}
-        </View>
-      </View>
-
-      {/* Activity Info */}
-      <View className='info-section'>
-        <Text className='activity-name'>{a.activity_name}</Text>
-        <View className='tags'>
-          <Text className='tag'>{remainDays > 0 ? `剩余${remainDays}天` : `剩余${remainHours}小时`}</Text>
-          <Text className='tag'>满{a.min_people}人成团</Text>
-          {a.max_per_user > 0 && <Text className='tag'>限购{a.max_per_user}份</Text>}
-        </View>
-      </View>
-
-      {/* Leader Info */}
-      {a.leader && (
-        <View className='leader-section'>
-          <Image src={a.leader.avatar || ''} className='leader-avatar' />
-          <View className='leader-info'>
-            <Text className='leader-name'>{a.leader.nickname}</Text>
-            <Text className='leader-area'>{a.leader.province} {a.leader.city}</Text>
-          </View>
-        </View>
-      )}
-
-      {/* Progress */}
-      <View className='progress-section'>
-        <View className='progress-header'>
-          <Text className='progress-label'>成团进度</Text>
-          <Text className='progress-count'>{a.current_people}/{a.min_people}人</Text>
-        </View>
-        <View className='progress-bar'>
-          <View className='progress-fill' style={{ width: `${progress}%` }} />
-        </View>
-        <Text className='progress-tip'>
-          {a.current_people >= a.min_people ? '🎉 已成团，等待发货' : `还差${a.min_people - a.current_people}人成团`}
-        </Text>
-      </View>
-
-      {/* Pickup Info */}
-      {a.leader && (
-        <View className='pickup-section'>
-          <Text className='section-title'>提货信息</Text>
-          <View className='pickup-info'>
-            <Text className='pickup-name'>{a.leader.pickup_address}</Text>
-            <Text className='pickup-hours'>营业时间: {a.leader.pickup_hours}</Text>
-          </View>
-        </View>
-      )}
-
-      {/* Address Selector */}
-      <View className='address-section' onClick={() => wx.navigateTo({ url: '/pages/address/address' })}>
-        {state.selectedAddress ? (
-          <View className='address-info'>
-            <Text className='consignee'>{state.selectedAddress.consignee} {state.selectedAddress.phone}</Text>
-            <Text className='address-detail'>
-              {state.selectedAddress.province}{state.selectedAddress.city}{state.selectedAddress.district}{state.selectedAddress.address}
+          <View className='tags'>
+            <Text className='tag'>{getRemainTime(a.end_time)}</Text>
+            <Text className='tag'>满{a.min_people}人成团</Text>
+            {a.max_per_user && a.max_per_user > 0 && (
+              <Text className='tag'>限购{a.max_per_user}份</Text>
+            )}
+            <Text className='tag status-tag' style={{ background: a.status === 'active' ? '#fff0e6' : '#f0f0f0', color: a.status === 'active' ? '#ff6b35' : '#999' }}>
+              {getStatusText(a.status)}
             </Text>
           </View>
-        ) : (
-          <Text className='add-address'>+ 添加收货地址</Text>
-        )}
-        <Text className='arrow'>›</Text>
-      </View>
-
-      {/* Rules */}
-      {a.rule_description && (
-        <View className='rules-section'>
-          <Text className='section-title'>活动规则</Text>
-          <Text className='rules-text'>{a.rule_description}</Text>
         </View>
-      )}
+
+        {/* Product Images */}
+        {a.product && a.product.images && a.product.images.length > 0 && (
+          <View className='images-section'>
+            <Text className='section-title'>商品图片</Text>
+            <View className='product-images'>
+              {a.product.images.map((img, idx) => (
+                <Image key={idx} src={img} mode='widthFix' className='product-image' />
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Leader Info */}
+        {a.leader && (
+          <View className='leader-section'>
+            <Text className='section-title'>团长信息</Text>
+            <View className='leader-card'>
+              <Image
+                src={a.leader.avatar || 'https://picsum.photos/100/100?random=avatar'}
+                className='leader-avatar'
+              />
+              <View className='leader-info'>
+                <Text className='leader-name'>{a.leader.nickname}</Text>
+                <Text className='leader-area'>
+                  {a.leader.province} {a.leader.city} {a.leader.district}
+                </Text>
+              </View>
+            </View>
+            {a.pickup_address && (
+              <View className='pickup-info'>
+                <Text className='pickup-label'>提货地址</Text>
+                <Text className='pickup-address'>{a.pickup_address}</Text>
+                {a.pickup_hours && (
+                  <Text className='pickup-hours'>营业时间: {a.pickup_hours}</Text>
+                )}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Progress */}
+        <View className='progress-section'>
+          <Text className='section-title'>成团进度</Text>
+          <View className='progress-header'>
+            <View className='progress-bar-wrap'>
+              <View className='progress-bar'>
+                <View className='progress-fill' style={{ width: `${progress}%` }} />
+              </View>
+            </View>
+            <Text className='progress-count'>{a.current_people}/{a.min_people}人</Text>
+          </View>
+          <Text className='progress-tip'>
+            {a.current_people >= a.min_people
+              ? '🎉 已成团，等待发货'
+              : `还差 ${a.min_people - a.current_people} 人成团`}
+          </Text>
+        </View>
+
+        {/* Rules */}
+        {a.rule_description && (
+          <View className='rules-section'>
+            <Text className='section-title'>活动规则</Text>
+            <Text className='rules-text'>{a.rule_description}</Text>
+          </View>
+        )}
+
+        {/* Order Form */}
+        <View className='form-section'>
+          <Text className='section-title'>填写订单</Text>
+
+          {deliveryType === 'pickup' && (
+            <View className='pickup-notice'>
+              <Text className='pickup-notice-text'>
+                📍 自提点：{a.pickup_address || '请前往提货'}
+              </Text>
+            </View>
+          )}
+
+          <View className='form-group'>
+            <Text className='form-label'>配送方式</Text>
+            <View className='delivery-type'>
+              {['pickup', 'delivery'].map(type => (
+                <View
+                  key={type}
+                  className={`type-btn ${deliveryType === type ? 'active' : ''}`}
+                  onClick={() => setDeliveryType(type as 'pickup' | 'delivery')}
+                >
+                  <Text>{type === 'pickup' ? '🏪 自提' : '📦 送货上门'}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View className='form-group'>
+            <Text className='form-label'>收货人姓名</Text>
+            <View className='form-input-wrap'>
+              <input
+                className='form-input'
+                placeholder='请输入收货人姓名'
+                value={receiverName}
+                onInput={(e: any) => setReceiverName(e.detail.value)}
+              />
+            </View>
+          </View>
+
+          <View className='form-group'>
+            <Text className='form-label'>手机号</Text>
+            <View className='form-input-wrap'>
+              <input
+                className='form-input'
+                type='number'
+                placeholder='请输入手机号'
+                value={receiverPhone}
+                onInput={(e: any) => setReceiverPhone(e.detail.value)}
+                maxLength={11}
+              />
+            </View>
+          </View>
+
+          <View className='form-group'>
+            <Text className='form-label'>
+              {deliveryType === 'pickup' ? '自提地址' : '收货地址'}
+            </Text>
+            <View className='form-input-wrap'>
+              <input
+                className='form-input'
+                placeholder={
+                  deliveryType === 'pickup'
+                    ? (a.pickup_address || '请填写自提地址')
+                    : '请填写详细收货地址'
+                }
+                value={address}
+                onInput={(e: any) => setAddress(e.detail.value)}
+              />
+            </View>
+          </View>
+
+          <View className='form-group'>
+            <Text className='form-label'>购买数量</Text>
+            <View className='quantity-wrap'>
+              <View
+                className='qty-btn'
+                onClick={() => setQuantity(q => Math.max(1, q - 1))}
+              >
+                <Text>−</Text>
+              </View>
+              <Text className='qty-value'>{quantity}</Text>
+              <View
+                className='qty-btn'
+                onClick={() => setQuantity(q => Math.min(a.stock || 99, q + 1))}
+              >
+                <Text>+</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        <View className='bottom-spacer' />
+      </ScrollView>
 
       {/* Bottom Bar */}
       <View className='bottom-bar'>
         <View className='bottom-price'>
           <Text className='price-label'>团购价</Text>
           <Text className='price-value'>¥{a.group_price}</Text>
+          {quantity > 1 && (
+            <Text className='price-total'>共 ¥{(a.group_price * quantity).toFixed(2)}</Text>
+          )}
         </View>
         <Button
-          className='join-btn'
-          disabled={a.status !== 1 || state.joining}
+          className={`join-btn ${a.status !== 'active' ? 'disabled' : ''}`}
+          disabled={a.status !== 'active' || joining}
+          loading={joining}
           onClick={handleJoin}
-          loading={state.joining}
         >
-          {a.status === 1 ? '立即参团' : a.status === 2 ? '已成团' : '活动未开始'}
+          {a.status === 'active' ? '立即参团' : getStatusText(a.status)}
         </Button>
       </View>
-
-      <View className='bottom-spacer' />
-    </ScrollView>
+    </View>
   )
 }
