@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Layout, Menu, Breadcrumb, Card, Row, Col, Statistic, Table, Tag, Button, Space, Typography, message } from 'antd'
+import { Layout, Menu, Breadcrumb, Card, Row, Col, Statistic, Table, Tag, Button, Space, Typography, message, Modal, Form, Input } from 'antd'
 import {
   DashboardOutlined, ShoppingOutlined, TeamOutlined, GiftOutlined,
   ShoppingCartOutlined, DollarOutlined, SettingOutlined, LogoutOutlined,
@@ -7,289 +7,307 @@ import {
 } from '@ant-design/icons'
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-router-dom'
 import './App.css'
+import Login from './pages/Login'
+import { authApi, statsApi, productsApi, activitiesApi, ordersApi, leaderApi } from './api'
 
 const { Header, Sider, Content, Footer } = Layout
 const { Title, Text } = Typography
+const { confirm } = Modal
 
-// API
-const API_BASE = 'http://localhost:8080/api/v1/admin'
-
-const adminApi = {
-  async getDashboard() {
-    const res = await fetch(`${API_BASE}/dashboard`)
-    return res.json()
-  },
-  async getUsers(params: any) {
-    const res = await fetch(`${API_BASE}/users`)
-    return res.json()
-  },
-  async getLeaders(params: any) {
-    const res = await fetch(`${API_BASE}/leaders`)
-    return res.json()
-  },
-  async auditProduct(id: number, approved: boolean, remark: string) {
-    const res = await fetch(`${API_BASE}/products/${id}/audit`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ approved, remark }),
-    })
-    return res.json()
-  },
-  async auditActivity(id: number, approved: boolean, remark: string) {
-    const res = await fetch(`${API_BASE}/activities/${id}/audit`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ approved, remark }),
-    })
-    return res.json()
-  },
-  async updateLeaderStatus(id: number, status: number) {
-    const res = await fetch(`${API_BASE}/leaders/${id}/status`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    })
-    return res.json()
-  },
+function isLoggedIn(): boolean {
+  return !!localStorage.getItem('admin_token')
 }
 
-// Dashboard Component
+function getLoggedUser(): string {
+  try {
+    const u = JSON.parse(localStorage.getItem('admin_user') || '{}')
+    return u.email || '管理员'
+  } catch { return '管理员' }
+}
+
+function logout() {
+  localStorage.removeItem('admin_token')
+  localStorage.removeItem('admin_user')
+  window.location.href = '/login'
+}
+
+function PrivateRoute({ children }: { children: React.ReactNode }) {
+  return isLoggedIn() ? <>{children}</> : <Navigate to="/login" replace />
+}
+
+// ─── Dashboard ───────────────────────────────────────────────────────────
 function Dashboard() {
   const [stats, setStats] = useState({
-    totalUsers: 0, totalLeaders: 0, todayOrders: 0, todaySales: 0,
-    pendingProducts: 0, pendingActivities: 0, pendingLeaders: 0,
+    total_users: 0, total_leaders: 0, total_orders: 0, total_revenue: 0,
+    pending_orders: 0,
   })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadDashboard()
+    statsApi.overview()
+      .then(r => setStats(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
-
-  const loadDashboard = async () => {
-    try {
-      setLoading(true)
-      const data = await adminApi.getDashboard()
-      setStats(data)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   return (
     <div>
       <Title level={3}>运营看板</Title>
       <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6}>
-          <Card loading={loading}>
-            <Statistic title="总用户数" value={stats.totalUsers} prefix={<TeamOutlined />} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card loading={loading}>
-            <Statistic title="团长数量" value={stats.totalLeaders} prefix={<GiftOutlined />} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card loading={loading}>
-            <Statistic title="今日订单" value={stats.todayOrders} prefix={<ShoppingCartOutlined />} />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card loading={loading}>
-            <Statistic title="今日销售额" value={stats.todaySales} prefix={<DollarOutlined />} precision={2} prefix="¥" />
-          </Card>
-        </Col>
+        <Col span={6}><Card loading={loading}><Statistic title="总用户数" value={stats.total_users} prefix={<TeamOutlined />} /></Card></Col>
+        <Col span={6}><Card loading={loading}><Statistic title="团长数量" value={stats.total_leaders} prefix={<GiftOutlined />} /></Card></Col>
+        <Col span={6}><Card loading={loading}><Statistic title="总订单数" value={stats.total_orders} prefix={<ShoppingCartOutlined />} /></Card></Col>
+        <Col span={6}><Card loading={loading}><Statistic title="总销售额" value={stats.total_revenue} prefix={<DollarOutlined />} precision={2} /></Card></Col>
       </Row>
-
       <Row gutter={16}>
-        <Col span={8}>
-          <Card title="待审核商品" extra={<Link to="/products">查看全部</Link>} loading={loading}>
-            <Statistic value={stats.pendingProducts} suffix="件" />
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card title="待审核活动" extra={<Link to="/activities">查看全部</Link>} loading={loading}>
-            <Statistic value={stats.pendingActivities} suffix="个" />
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card title="待审核团长" extra={<Link to="/leaders">查看全部</Link>} loading={loading}>
-            <Statistic value={stats.pendingLeaders} suffix="人" />
-          </Card>
-        </Col>
+        <Col span={6}><Card title="待处理订单" loading={loading}><Statistic value={stats.pending_orders} suffix="单" valueStyle={{ color: '#ff6b35' }} /></Card></Col>
       </Row>
     </div>
   )
 }
 
-// Product Audit Component
-function ProductAudit() {
+// ─── Product ─────────────────────────────────────────────────────────────
+function ProductManagement() {
   const [products, setProducts] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [form] = Form.useForm()
 
-  const loadProducts = async () => {
-    try {
-      setLoading(true)
-      const data = await adminApi.getUsers({})
-      setProducts(data.list || [])
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
+  const load = (p = 1) => {
+    setLoading(true)
+    productsApi.list({ page: p, page_size: 20 })
+      .then(r => { setProducts(r.data.items); setTotal(r.data.total); setPage(p) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }
+  useEffect(() => { load() }, [])
+
+  const statusMap: Record<number, { text: string; color: string }> = {
+    0: { text: '待审核', color: 'orange' }, 1: { text: '正常', color: 'green' }, 2: { text: '已拒绝', color: 'red' },
   }
 
-  useEffect(() => { loadProducts() }, [])
-
-  const handleAudit = async (id: number, approved: boolean) => {
+  const handleCreate = async () => {
     try {
-      await adminApi.auditProduct(id, approved, '')
-      message.success(approved ? '已通过' : '已拒绝')
-      loadProducts()
-    } catch (e: any) { message.error(e.message) }
+      const values = await form.validateFields()
+      await productsApi.create(values)
+      message.success('创建成功')
+      setCreateOpen(false)
+      form.resetFields()
+      load()
+    } catch (e: any) {
+      if (e.errorFields) return // validation
+      message.error(e.response?.data?.detail || '创建失败')
+    }
   }
 
   return (
     <div>
-      <Title level={3}>商品审核</Title>
+      <Title level={3}>商品管理</Title>
+      <div style={{ marginBottom: 16 }}>
+        <Button type="primary" style={{ background: '#ff6b35', borderColor: '#ff6b35' }} onClick={() => setCreateOpen(true)}>创建商品</Button>
+      </div>
       <Table
-        dataSource={products}
-        rowKey="id"
-        loading={loading}
+        dataSource={products} rowKey="id" loading={loading}
+        pagination={{ current: page, total, pageSize: 20, onChange: load }}
         columns={[
           { title: '商品名称', dataIndex: 'name', key: 'name' },
           { title: '分类', dataIndex: 'category', key: 'category' },
-          { title: '团长', dataIndex: 'leader', key: 'leader' },
-          { title: '价格', dataIndex: 'price', key: 'price', render: (v) => `¥${v}` },
-          {
-            title: '状态',
-            dataIndex: 'status',
-            key: 'status',
-            render: (v) => v === 0 ? <Tag color="orange">待审核</Tag> : v === 1 ? <Tag color="green">已通过</Tag> : <Tag color="red">已拒绝</Tag>
-          },
-          {
-            title: '操作',
-            key: 'action',
-            render: (_, r) => r.status === 0 && (
-              <Space>
-                <Button size="small" type="primary" onClick={() => handleAudit(r.id, true)}>通过</Button>
-                <Button size="small" danger onClick={() => handleAudit(r.id, false)}>拒绝</Button>
-              </Space>
-            )
-          },
+          { title: '价格', dataIndex: 'price', key: 'price', render: (v: number) => `¥${v.toFixed(2)}` },
+          { title: '库存', dataIndex: 'stock', key: 'stock' },
+          { title: '销量', dataIndex: 'sales_count', key: 'sales_count' },
+          { title: '状态', dataIndex: 'status', key: 'status', render: (v: number) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.text}</Tag> },
+        ]}
+      />
+      <Modal title="创建商品" open={createOpen} onOk={handleCreate} onCancel={() => setCreateOpen(false)}>
+        <Form form={form} layout="vertical">
+          <Form.Item name="name" label="商品名称" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="category" label="分类"><Input /></Form.Item>
+          <Form.Item name="price" label="价格" rules={[{ required: true }]}><Input type="number" /></Form.Item>
+          <Form.Item name="stock" label="库存"><Input type="number" /></Form.Item>
+          <Form.Item name="description" label="描述"><Input.TextArea rows={3} /></Form.Item>
+        </Form>
+      </Modal>
+    </div>
+  )
+}
+
+// ─── Activity ────────────────────────────────────────────────────────────
+function ActivityManagement() {
+  const [activities, setActivities] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    activitiesApi.list({ page_size: 100 })
+      .then(r => setActivities(r.data.items))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const statusMap: Record<string, { text: string; color: string }> = {
+    pending: { text: '预热中', color: 'orange' },
+    active: { text: '进行中', color: 'green' },
+    completed: { text: '已成团', color: 'blue' },
+    closed: { text: '已截团', color: 'default' },
+  }
+
+  return (
+    <div>
+      <Title level={3}>活动管理</Title>
+      <Table
+        dataSource={activities} rowKey="id" loading={loading}
+        columns={[
+          { title: '活动名称', dataIndex: 'title', key: 'title' },
+          { title: '团购价', dataIndex: 'group_price', key: 'group_price', render: (v: number) => `¥${v?.toFixed(2) || '0.00'}` },
+          { title: '参团人数', key: 'people', render: (_: any, r: any) => `${r.current_people || 0}/${r.min_people || 0}` },
+          { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.text || v}</Tag> },
+          { title: '开始时间', dataIndex: 'start_time', key: 'start_time' },
+          { title: '结束时间', dataIndex: 'end_time', key: 'end_time' },
         ]}
       />
     </div>
   )
 }
 
-// Leader Management Component
+// ─── User Management ─────────────────────────────────────────────────────
+function UserManagement() {
+  return (
+    <div>
+      <Title level={3}>用户管理</Title>
+      <Card><Text type="secondary">用户列表功能开发中...</Text></Card>
+    </div>
+  )
+}
+
+// ─── Leader Management ───────────────────────────────────────────────────
 function LeaderManagement() {
   const [leaders, setLeaders] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
 
-  const loadLeaders = async () => {
-    try {
-      setLoading(true)
-      const data = await adminApi.getLeaders({})
-      setLeaders(data.list || [])
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
+  useEffect(() => {
+    setLoading(true)
+    leaderApi.profile()
+      .then(r => setLeaders([r.data]))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const statusMap: Record<number, { text: string; color: string }> = {
+    0: { text: '待审核', color: 'orange' }, 1: { text: '已通过', color: 'green' },
+    2: { text: '已拒绝', color: 'red' }, 3: { text: '已禁用', color: 'default' },
   }
-
-  useEffect(() => { loadLeaders() }, [])
-
-  const handleStatus = async (id: number, status: number) => {
-    try {
-      await adminApi.updateLeaderStatus(id, status)
-      message.success('操作成功')
-      loadLeaders()
-    } catch (e: any) { message.error(e.message) }
-  }
-
-  const statusText: Record<number, string> = { 1: '待审核', 2: '已通过', 3: '已拒绝', 4: '已禁用' }
-  const statusColor: Record<number, string> = { 1: 'orange', 2: 'green', 3: 'red', 4: 'default' }
 
   return (
     <div>
       <Title level={3}>团长管理</Title>
       <Table
-        dataSource={leaders}
-        rowKey="id"
-        loading={loading}
+        dataSource={leaders} rowKey="id" loading={loading}
         columns={[
-          { title: '团长ID', dataIndex: 'id', key: 'id', width: 80 },
           { title: '昵称', dataIndex: 'nickname', key: 'nickname' },
-          { title: '真实姓名', dataIndex: 'real_name', key: 'real_name' },
-          { title: '手机号', dataIndex: 'phone', key: 'phone' },
-          { title: '地区', dataIndex: 'area', key: 'area', render: (_, r) => `${r.province} ${r.city}` },
-          {
-            title: '等级',
-            dataIndex: 'level',
-            key: 'level',
-            render: (v) => ['实习', '正式', '金牌', '钻石'][v - 1] || '实习'
-          },
-          { title: '累计销售额', dataIndex: 'total_sales', key: 'total_sales', render: (v) => `¥${v}` },
-          {
-            title: '状态',
-            dataIndex: 'status',
-            key: 'status',
-            render: (v) => <Tag color={statusColor[v]}>{statusText[v]}</Tag>
-          },
-          {
-            title: '操作',
-            key: 'action',
-            render: (_, r) => (
-              <Space>
-                {r.status === 1 && (
-                  <>
-                    <Button size="small" type="primary" onClick={() => handleStatus(r.id, 2)}>通过</Button>
-                    <Button size="small" danger onClick={() => handleStatus(r.id, 3)}>拒绝</Button>
-                  </>
-                )}
-                {r.status === 2 && <Button size="small" danger onClick={() => handleStatus(r.id, 4)}>禁用</Button>}
-                {r.status === 4 && <Button size="small" onClick={() => handleStatus(r.id, 2)}>启用</Button>}
-              </Space>
-            )
-          },
+          { title: '手机', dataIndex: 'phone', key: 'phone' },
+          { title: '地区', key: 'area', render: (_: any, r: any) => `${r.province || ''} ${r.city || ''}` },
+          { title: '自提点', dataIndex: 'pickup_address', key: 'pickup_address' },
+          { title: '状态', dataIndex: 'status', key: 'status', render: (v: number) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.text}</Tag> },
         ]}
       />
     </div>
   )
 }
 
-// Main Layout
+// ─── Order Management ────────────────────────────────────────────────────
+function OrderManagement() {
+  const [orders, setOrders] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+
+  const load = (p = 1) => {
+    setLoading(true)
+    ordersApi.list({ page: p, page_size: 20 })
+      .then(r => { setOrders(r.data.items); setTotal(r.data.total); setPage(p) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }
+  useEffect(() => { load() }, [])
+
+  const statusMap: Record<string, { text: string; color: string }> = {
+    pending_payment: { text: '待支付', color: 'orange' },
+    paid: { text: '待发货', color: 'blue' },
+    shipped: { text: '已发货', color: 'cyan' },
+    completed: { text: '已完成', color: 'green' },
+    cancelled: { text: '已取消', color: 'default' },
+  }
+
+  return (
+    <div>
+      <Title level={3}>订单管理</Title>
+      <Table
+        dataSource={orders} rowKey="id" loading={loading}
+        pagination={{ current: page, total, pageSize: 20, onChange: load }}
+        columns={[
+          { title: '订单号', dataIndex: 'order_no', key: 'order_no', width: 180 },
+          { title: '数量', dataIndex: 'quantity', key: 'quantity' },
+          { title: '金额', dataIndex: 'total_amount', key: 'total_amount', render: (v: number) => `¥${v?.toFixed(2) || '0.00'}` },
+          { title: '状态', dataIndex: 'status', key: 'status', render: (v: string) => <Tag color={statusMap[v]?.color}>{statusMap[v]?.text}</Tag> },
+          { title: '收货人', dataIndex: 'receiver_name', key: 'receiver_name' },
+          { title: '地址', dataIndex: 'address', key: 'address', ellipsis: true },
+          { title: '时间', dataIndex: 'created_at', key: 'created_at', width: 160 },
+        ]}
+      />
+    </div>
+  )
+}
+
+// ─── Placeholder Pages ───────────────────────────────────────────────────
+function Placeholder({ title }: { title: string }) {
+  return (
+    <div>
+      <Title level={3}>{title}</Title>
+      <Card><Text type="secondary">功能开发中...</Text></Card>
+    </div>
+  )
+}
+
+// ─── Main Layout ─────────────────────────────────────────────────────────
 function MainLayout() {
   const location = useLocation()
   const navigate = useNavigate()
 
   const menuItems = [
     { key: '/', icon: <DashboardOutlined />, label: '运营看板' },
+    { key: '/products', icon: <ShoppingOutlined />, label: '商品管理' },
+    { key: '/activities', icon: <AppstoreOutlined />, label: '活动管理' },
+    { key: '/orders', icon: <ShoppingCartOutlined />, label: '订单管理' },
     { key: '/users', icon: <TeamOutlined />, label: '用户管理' },
     { key: '/leaders', icon: <GiftOutlined />, label: '团长管理' },
-    { key: '/products', icon: <ShoppingOutlined />, label: '商品审核' },
-    { key: '/activities', icon: <AppstoreOutlined />, label: '活动审核' },
-    { key: '/orders', icon: <ShoppingCartOutlined />, label: '订单管理' },
-    { key: '/settlements', icon: <DollarOutlined />, label: '结算管理' },
-    { key: '/marketing', icon: <GiftOutlined />, label: '营销管理' },
-    { key: '/risk', icon: <AlertOutlined />, label: '风控中心' },
     { key: '/reports', icon: <FileTextOutlined />, label: '数据报表' },
     { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
   ]
 
   const breadcrumbNameMap: Record<string, string> = {
-    '/': '运营看板', '/users': '用户管理', '/leaders': '团长管理',
-    '/products': '商品审核', '/activities': '活动审核', '/orders': '订单管理',
-    '/settlements': '结算管理', '/marketing': '营销管理', '/risk': '风控中心',
+    '/': '运营看板', '/products': '商品管理', '/activities': '活动管理',
+    '/orders': '订单管理', '/users': '用户管理', '/leaders': '团长管理',
     '/reports': '数据报表', '/settings': '系统设置',
   }
 
   const pathSnippets = location.pathname.split('/').filter(i => i)
-  const extraBreadcrumbItems = pathSnippets.map((_, index) => {
-    const url = `/${pathSnippets.slice(0, index + 1).join('/')}`
-    return { key: url, title: breadcrumbNameMap[url] || url }
-  })
-
   const breadcrumbItems = [
     { key: '/', title: <Link to="/">首页</Link> },
-    ...extraBreadcrumbItems,
+    ...pathSnippets.map((_, index) => {
+      const url = '/' + pathSnippets.slice(0, index + 1).join('/')
+      return { key: url, title: breadcrumbNameMap[url] || url }
+    }),
   ]
+
+  const handleLogout = () => {
+    confirm({
+      title: '确认退出？',
+      icon: <LogoutOutlined />,
+      onOk: logout,
+    })
+  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -309,38 +327,39 @@ function MainLayout() {
         <Header style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Breadcrumb items={breadcrumbItems} />
           <Space>
-            <Text>管理员</Text>
-            <Button icon={<LogoutOutlined />}>退出</Button>
+            <Text>{getLoggedUser()}</Text>
+            <Button icon={<LogoutOutlined />} onClick={handleLogout}>退出</Button>
           </Space>
         </Header>
         <Content style={{ padding: 24, overflow: 'auto' }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/users" element={<div><Title level={3}>用户管理</Title><Text>用户列表、行为分析、拉黑管理</Text></div>} />
+            <Route path="/products" element={<ProductManagement />} />
+            <Route path="/activities" element={<ActivityManagement />} />
+            <Route path="/orders" element={<OrderManagement />} />
+            <Route path="/users" element={<UserManagement />} />
             <Route path="/leaders" element={<LeaderManagement />} />
-            <Route path="/products" element={<ProductAudit />} />
-            <Route path="/activities" element={<div><Title level={3}>活动审核</Title></div>} />
-            <Route path="/orders" element={<div><Title level={3}>订单管理</Title></div>} />
-            <Route path="/settlements" element={<div><Title level={3}>结算管理</Title></div>} />
-            <Route path="/marketing" element={<div><Title level={3}>营销管理</Title></div>} />
-            <Route path="/risk" element={<div><Title level={3}>风控中心</Title></div>} />
-            <Route path="/reports" element={<div><Title level={3}>数据报表</Title></div>} />
-            <Route path="/settings" element={<div><Title level={3}>系统设置</Title></div>} />
+            <Route path="/reports" element={<Placeholder title="数据报表" />} />
+            <Route path="/settings" element={<Placeholder title="系统设置" />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Content>
         <Footer style={{ textAlign: 'center', borderTop: '1px solid #f0f0f0' }}>
           社区团购管理系统 ©2026
         </Footer>
-      </Content>
+      </Layout>
     </Layout>
   )
 }
 
+// ─── App Root ────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <BrowserRouter>
-      <MainLayout />
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/*" element={<PrivateRoute><MainLayout /></PrivateRoute>} />
+      </Routes>
     </BrowserRouter>
   )
 }

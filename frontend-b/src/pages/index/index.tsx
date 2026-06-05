@@ -1,76 +1,85 @@
-import { Component, reactive, onMounted } from 'react'
-import { View, Text, Image, Navigator } from '@tarojs/components'
-import { api, Leader, Activity } from '../../api/client'
+import { useState, useEffect } from 'react'
+import { View, Text, Image, Navigator, PullDownRefresh } from '@tarojs/components'
+import Taro from '@tarojs/taro'
+import { api, Leader, Activity, StatsOverview } from '../../api/client'
 import './index.css'
 
-export default function LeaderDashboard() {
-  const state = reactive({
-    leader: null as Leader | null,
-    todayOrders: 0,
-    todaySales: 0,
-    pendingOrders: 0,
-    pendingRefunds: 0,
-    recentActivities: [] as Activity[],
-    loading: false,
-  })
+const STATUS_LABEL: Record<number, string> = { 0: '待开始', 1: '进行中', 2: '已结束' }
+const STATUS_COLOR: Record<number, string> = { 0: '#999', 1: '#1890ff', 2: '#52c41a' }
 
-  const loadDashboard = async () => {
+export default function LeaderDashboard() {
+  const [leader, setLeader] = useState<Leader | null>(null)
+  const [stats, setStats] = useState<StatsOverview | null>(null)
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [loading, setLoading] = useState(false)
+
+  const loadData = async () => {
     try {
-      state.loading = true
-      const [dashboard, activities] = await Promise.all([
-        api.getLeaderDashboard(),
-        api.getActivities({ page: 1, page_size: 5 }),
+      setLoading(true)
+      const [profile, overview, actsData] = await Promise.all([
+        api.getLeaderProfile().catch(() => null),
+        api.getStatsOverview().catch(() => null),
+        api.getActivities({ status: '1', page: 1, page_size: 5 }).catch(() => ({ items: [] as Activity[] })),
       ])
-      state.leader = dashboard.leader
-      state.todayOrders = dashboard.todayOrders
-      state.todaySales = dashboard.todaySales
-      state.pendingOrders = dashboard.pendingOrders
-      state.pendingRefunds = dashboard.pendingRefunds
-      state.recentActivities = activities.list
+      setLeader(profile)
+      setStats(overview)
+      setActivities(actsData.items || [])
     } catch (e) {
       console.error(e)
     } finally {
-      state.loading = false
+      setLoading(false)
     }
   }
 
-  onMounted(() => {
-    loadDashboard()
-  })
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const onPullDownRefresh = async () => {
+    await loadData()
+    Taro.stopPullDownRefresh()
+  }
 
   return (
     <View className='dashboard'>
+      <PullDownRefresh onRefresh={onPullDownRefresh} />
+
       {/* Header */}
       <View className='header'>
         <View className='header-bg' />
         <View className='header-content'>
-          <Image src={state.leader?.avatar || ''} className='avatar' />
+          <Image
+            src={leader?.nickname ? `https://api.dicebear.com/7.x/initials/svg?seed=${leader.nickname}` : 'https://picsum.photos/80/80'}
+            className='avatar'
+          />
           <View className='header-info'>
-            <Text className='nickname'>{state.leader?.nickname || '团长'}</Text>
-            <View className='level-badge'>
-              <Text>Lv.{state.leader?.level || 1}</Text>
-            </View>
+            <Text className='nickname'>{leader?.nickname || '团长'}</Text>
+            {leader?.province && (
+              <Text className='location'>{leader.province} {leader.city}</Text>
+            )}
           </View>
-          <Navigator url='/pages/settings/profile' className='edit-btn'>编辑</Navigator>
+          <Navigator url='/pages/settings/settings' className='edit-btn'>
+            <Text>编辑</Text>
+          </Navigator>
         </View>
       </View>
 
       {/* Stats Cards */}
       <View className='stats-grid'>
         <Navigator url='/pages/finance/finance' className='stat-card blue'>
-          <Text className='stat-value'>¥{state.todaySales.toFixed(2)}</Text>
+          <Text className='stat-value'>¥{stats?.today_sales || '0.00'}</Text>
           <Text className='stat-label'>今日销售额</Text>
         </Navigator>
         <Navigator url='/pages/order/list' className='stat-card orange'>
-          <Text className='stat-value'>{state.todayOrders}</Text>
+          <Text className='stat-value'>{stats?.today_orders || 0}</Text>
           <Text className='stat-label'>今日订单</Text>
         </Navigator>
-        <Navigator url='/pages/order/list' className='stat-card green'>
-          <Text className='stat-value'>{state.pendingOrders}</Text>
+        <Navigator url='/pages/order/list?tab=1' className='stat-card green'>
+          <Text className='stat-value'>{stats?.pending_orders || 0}</Text>
           <Text className='stat-label'>待发货</Text>
         </Navigator>
-        <Navigator url='/pages/order/refund' className='stat-card red'>
-          <Text className='stat-value'>{state.pendingRefunds}</Text>
+        <Navigator url='/pages/order/list?tab=2' className='stat-card red'>
+          <Text className='stat-value'>{stats?.pending_refunds || 0}</Text>
           <Text className='stat-label'>退款申请</Text>
         </Navigator>
       </View>
@@ -79,9 +88,11 @@ export default function LeaderDashboard() {
       <View className='balance-card'>
         <View className='balance-info'>
           <Text className='balance-label'>可提现余额</Text>
-          <Text className='balance-value'>¥{state.leader?.balance?.toFixed(2) || '0.00'}</Text>
+          <Text className='balance-value'>¥{stats?.balance || '0.00'}</Text>
         </View>
-        <Navigator url='/pages/finance/withdraw' className='withdraw-btn'>提现</Navigator>
+        <Navigator url='/pages/finance/withdraw' className='withdraw-btn'>
+          <Text>提现</Text>
+        </Navigator>
       </View>
 
       {/* Quick Actions */}
@@ -89,11 +100,11 @@ export default function LeaderDashboard() {
         <Navigator url='/pages/activity/create' className='action-btn primary'>
           <Text>+ 创建活动</Text>
         </Navigator>
-        <Navigator url='/pages/product/list' className='action-btn'>
-          <Text>商品管理</Text>
-        </Navigator>
         <Navigator url='/pages/activity/list' className='action-btn'>
           <Text>活动管理</Text>
+        </Navigator>
+        <Navigator url='/pages/data/data' className='action-btn'>
+          <Text>数据统计</Text>
         </Navigator>
       </View>
 
@@ -101,30 +112,38 @@ export default function LeaderDashboard() {
       <View className='section'>
         <View className='section-header'>
           <Text className='section-title'>进行中的活动</Text>
-          <Navigator url='/pages/activity/list' className='more'>查看全部 ›</Navigator>
+          <Navigator url='/pages/activity/list' className='more'>
+            <Text>查看全部 ›</Text>
+          </Navigator>
         </View>
-        {state.recentActivities.length === 0 ? (
+        {activities.length === 0 ? (
           <View className='empty'>
             <Text>暂无进行中的活动</Text>
-            <Navigator url='/pages/activity/create' className='create-link'>立即创建</Navigator>
+            <Navigator url='/pages/activity/create' className='create-link'>
+              <Text>立即创建 ›</Text>
+            </Navigator>
           </View>
         ) : (
           <View className='activity-list'>
-            {state.recentActivities.map((act) => (
-              <Navigator key={act.id} url={`/pages/activity/detail?id=${act.id}`} className='activity-item'>
+            {activities.map((act) => (
+              <Navigator key={act.id} url={`/pages/activity/list?id=${act.id}`} className='activity-item'>
                 <View className='act-left'>
                   <Text className='act-name'>{act.activity_name}</Text>
                   <Text className='act-price'>¥{act.group_price}</Text>
                 </View>
                 <View className='act-right'>
                   <Text className='act-people'>{act.current_people}/{act.min_people}人</Text>
-                  <Text className='act-status'>进行中</Text>
+                  <Text className='act-status' style={{ color: STATUS_COLOR[act.status] || '#1890ff' }}>
+                    {STATUS_LABEL[act.status] || '进行中'}
+                  </Text>
                 </View>
               </Navigator>
             ))}
           </View>
         )}
       </View>
+
+      {loading && <View className='loading'><Text>加载中...</Text></View>}
     </View>
   )
 }

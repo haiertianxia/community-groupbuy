@@ -1,0 +1,162 @@
+.orders-page {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  background: #fff;
+  border-bottom: 1px solid #eee;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.tab {
+  flex: 1;
+  text-align: center;
+  padding: 14px 0;
+  font-size: 14px;
+  color: #666;
+  border-bottom: 2px solid transparent;
+}
+.tab.active {
+  color: #1890ff;
+  border-bottom-color: #1890ff;
+  font-weight: 600;
+}
+
+/* Order List */
+.order-list {
+  padding: 12px 16px;
+}
+.order-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.order-no {
+  font-size: 13px;
+  color: #999;
+}
+.order-status {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Order Body */
+.order-body {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.item-img-placeholder {
+  width: 60px;
+  height: 60px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  flex-shrink: 0;
+}
+.item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.item-name {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+.item-price {
+  font-size: 15px;
+  color: #ff4d4f;
+  font-weight: 600;
+}
+.item-count {
+  font-size: 12px;
+  color: #999;
+}
+.item-time {
+  font-size: 12px;
+  color: #bbb;
+  margin-top: 2px;
+}
+
+/* Receiver */
+.order-receiver {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+  color: #666;
+  background: #f8f8f8;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+.receiver-label { color: #999; }
+.receiver-name { color: #333; font-weight: 500; }
+.receiver-phone { color: #666; }
+.delivery-type { color: #1890ff; }
+
+/* Actions */
+.order-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.btn-ship {
+  background: #1890ff !important;
+  color: #fff !important;
+  border: none !important;
+  font-size: 12px;
+}
+.btn-reject {
+  background: #fff !important;
+  color: #999 !important;
+  border: 1px solid #ddd !important;
+  font-size: 12px;
+}
+.btn-approve {
+  background: #fff !important;
+  color: #ff4d4f !important;
+  border: 1px solid #ff4d4f !important;
+  font-size: 12px;
+}
+
+/* Empty & Loading */
+.empty {
+  text-align: center;
+  padding: 60px 0;
+  color: #999;
+  font-size: 14px;
+}
+.loading-text {
+  text-align: center;
+  padding: 12px;
+  color: #999;
+  font-size: 13px;
+}
+.no-more {
+  text-align: center;
+  padding: 16px;
+  color: #ccc;
+  font-size: 12px;
+}

@@ -1,105 +1,117 @@
-import { Component, reactive, onMounted } from 'react'
-import { View, Text, Image, Button, Navigator } from '@tarojs/components'
+import { useState, useEffect, useCallback } from 'react'
+import { View, Text, Image, Button, Navigator, ScrollView } from '@tarojs/components'
 import Taro from '@tarojs/taro'
 import { api, Order } from '../../api/client'
 import './index.css'
 
 const STATUS_TEXT: Record<number, string> = {
-  0: '待支付', 1: '待发货', 2: '待收货', 3: '已确认', 4: '已完成',
-  5: '已取消', 6: '退款中', 7: '已退款',
+  0: '待支付', 1: '待发货', 2: '待收货', 3: '已确认',
+  4: '已完成', 5: '已取消', 6: '退款中', 7: '已退款',
 }
 const STATUS_COLOR: Record<number, string> = {
-  0: '#ff6b35', 1: '#1890ff', 2: '#1890ff', 3: '#faad14', 4: '#52c41a',
-  5: '#999', 6: '#faad14', 7: '#999',
+  0: '#fa8c16', 1: '#1890ff', 2: '#1890ff', 3: '#faad14',
+  4: '#52c41a', 5: '#999', 6: '#faad14', 7: '#999',
 }
+const DELIVERY_TEXT: Record<number, string> = { 0: '自提', 1: '快递' }
 
-export default function LeaderOrders() {
-  const state = reactive({
-    orders: [] as Order[],
-    loading: false,
-    page: 1,
-    hasMore: true,
-    currentTab: 0,
-    tabs: ['全部', '待发货', '退款中'],
-    shipping: false,
-    shippingId: 0,
-  })
+export default function OrderList() {
+  const [orders, setOrders] = useState<Order[]>([])
+  const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const [currentTab, setCurrentTab] = useState(0)
+  const [shipping, setShipping] = useState<number | null>(null)
 
-  const loadOrders = async () => {
-    if (state.loading || !state.hasMore) return
-    state.loading = true
+  const tabs = [
+    { label: '全部', status: undefined },
+    { label: '待发货', status: 1 },
+    { label: '退款中', status: 6 },
+  ]
+
+  const fetchOrders = useCallback(async (pageNum: number, reset = false) => {
+    const statusFilter = tabs[currentTab].status
+    const params: { page: number; page_size: number; status?: number } = {
+      page: pageNum,
+      page_size: 10,
+    }
+    if (statusFilter !== undefined) params.status = statusFilter
+
+    setLoading(true)
     try {
-      const statusFilter = state.currentTab === 0 ? undefined :
-        state.currentTab === 1 ? 1 : 6
-      const res = await api.getLeaderOrders({ page: state.page, page_size: 10, status: statusFilter })
-      if (state.page === 1) {
-        state.orders = res.list
+      const res = await api.getLeaderOrders(params)
+      const items = res.items || []
+      if (reset || pageNum === 1) {
+        setOrders(items)
       } else {
-        state.orders = [...state.orders, ...res.list]
+        setOrders(prev => [...prev, ...items])
       }
-      state.hasMore = res.list.length === 10
-      state.page++
-    } catch (e) {
-      console.error(e)
+      setHasMore(items.length === 10)
+      setPage(pageNum)
+    } catch (e: any) {
+      Taro.showToast({ title: e.message || '加载失败', icon: 'none' })
     } finally {
-      state.loading = false
+      setLoading(false)
+    }
+  }, [currentTab])
+
+  useEffect(() => {
+    setPage(1)
+    setHasMore(true)
+    fetchOrders(1, true)
+  }, [currentTab])
+
+  const onReachBottom = () => {
+    if (!loading && hasMore) {
+      fetchOrders(page + 1)
     }
   }
 
-  onMounted(() => {
-    loadOrders()
-  })
+  const onPullDownRefresh = async () => {
+    await fetchOrders(1, true)
+    Taro.stopPullDownRefresh()
+  }
 
   const switchTab = (index: number) => {
-    state.currentTab = index
-    state.orders = []
-    state.page = 1
-    state.hasMore = true
-    loadOrders()
+    setCurrentTab(index)
   }
 
   const handleShip = async (orderId: number) => {
-    const expressMap: Record<string, { id: string; name: string }[]> = {
-      '顺丰': [{ id: 'SF', name: '顺丰速运' }],
-      '圆通': [{ id: 'YTO', name: '圆通速递' }],
-      '中通': [{ id: 'ZTO', name: '中通快递' }],
-      '韵达': [{ id: 'YD', name: '韵达快递' }],
-    }
-
-    const res = await Taro.showActionSheet({
-      itemList: ['顺丰速运', '圆通速递', '中通快递', '韵达快递'],
-    })
-
-    if (res.cancel) return
-
-    const express = ['顺丰速运', '圆通速递', '中通快递', '韵达快递'][res.tapIndex]
-    const expressNo = await Taro.showModal({
-      title: '请输入快递单号',
-      editable: true,
-      placeholderText: '请输入快递单号',
-    })
-
-    if (!expressNo.confirm || !expressNo.content) return
-
+    const companies = ['顺丰速运', '圆通速递', '中通快递', '韵达快递', '极兔速递', '京东物流']
     try {
-      state.shipping = true
-      state.shippingId = orderId
-      await api.shipOrder(orderId, express, expressNo.content)
+      const res = await Taro.showActionSheet({ itemList: companies })
+      const express = companies[res.tapIndex]
+
+      const inputRes = await Taro.showModal({
+        title: '填写快递单号',
+        editable: true,
+        placeholderText: '请输入快递单号',
+      })
+      if (!inputRes.confirm || !inputRes.content?.trim()) return
+
+      setShipping(orderId)
+      await api.shipOrder(orderId)
       Taro.showToast({ title: '发货成功', icon: 'success' })
-      loadOrders()
+      await fetchOrders(1, true)
     } catch (e: any) {
       Taro.showToast({ title: e.message, icon: 'none' })
     } finally {
-      state.shipping = false
-      state.shippingId = 0
+      setShipping(null)
     }
   }
 
   const handleRefund = async (orderId: number, approved: boolean) => {
+    const action = approved ? '同意' : '拒绝'
+    const confirm = await Taro.showModal({
+      title: `确认${action}退款？`,
+      content: approved ? '款项将原路退回给用户' : '订单将恢复正常状态',
+    })
+    if (!confirm.confirm) return
+
     try {
-      await api.processRefund(orderId, approved, '')
-      Taro.showToast({ title: approved ? '已同意退款' : '已拒绝退款', icon: 'success' })
-      loadOrders()
+      const newStatus = approved ? 7 : 3 // refunded or confirmed
+      await api.updateOrder(orderId, { status: newStatus, refund_reason: approved ? '团长同意退款' : '团长拒绝退款' })
+      Taro.showToast({ title: `已${action}退款`, icon: 'success' })
+      await fetchOrders(1, true)
     } catch (e: any) {
       Taro.showToast({ title: e.message, icon: 'none' })
     }
@@ -109,43 +121,73 @@ export default function LeaderOrders() {
     <View className='orders-page'>
       {/* Tabs */}
       <View className='tabs'>
-        {state.tabs.map((tab, i) => (
-          <View key={i} className={`tab ${state.currentTab === i ? 'active' : ''}`} onClick={() => switchTab(i)}>
-            {tab}
+        {tabs.map((tab, i) => (
+          <View
+            key={i}
+            className={`tab ${currentTab === i ? 'active' : ''}`}
+            onClick={() => switchTab(i)}
+          >
+            <Text>{tab.label}</Text>
           </View>
         ))}
       </View>
 
-      {/* Orders */}
-      <View className='order-list'>
-        {state.orders.length === 0 && !state.loading && (
-          <View className='empty'><Text>暂无订单</Text></View>
+      <ScrollView
+        scrollY
+        className='order-list'
+        onScrollToLower={onReachBottom}
+        lowerThreshold={80}
+      >
+        {orders.length === 0 && !loading && (
+          <View className='empty'>
+            <Text>暂无订单</Text>
+          </View>
         )}
 
-        {state.orders.map((order) => (
-          <View key={order.id} className='order-card'>
+        {orders.map((order) => (
+          <Navigator
+            key={order.id}
+            url={`/pages/order/detail?id=${order.id}`}
+            className='order-card'
+          >
             <View className='order-header'>
-              <Text className='order-no'>{order.order_no}</Text>
+              <Text className='order-no'>订单号: {order.order_no}</Text>
               <Text className='order-status' style={{ color: STATUS_COLOR[order.status] }}>
                 {STATUS_TEXT[order.status]}
               </Text>
             </View>
 
             <View className='order-body'>
-              <Image src='https://picsum.photos/80/80' mode='aspectFill' className='item-img' />
+              <View className='item-img-placeholder'>
+                <Text>📦</Text>
+              </View>
               <View className='item-info'>
-                <Text className='item-name'>团购商品</Text>
+                <Text className='item-name'>
+                  {order.activity?.activity_name || `活动 #${order.activity_id}`}
+                </Text>
                 <Text className='item-price'>¥{order.pay_amount}</Text>
-                <Text className='item-time'>{new Date(order.created_at).toLocaleString()}</Text>
+                <Text className='item-count'>x{order.quantity}</Text>
+                <Text className='item-time'>
+                  {new Date(order.created_at).toLocaleString('zh-CN')}
+                </Text>
               </View>
             </View>
 
-            <View className='order-actions'>
+            <View className='order-receiver'>
+              <Text className='receiver-label'>收件人:</Text>
+              <Text className='receiver-name'>{order.receiver_name}</Text>
+              <Text className='receiver-phone'>{order.receiver_phone}</Text>
+              <Text className='delivery-type'>
+                [{DELIVERY_TEXT[order.delivery_type] || '自提'}]
+              </Text>
+            </View>
+
+            <View className='order-actions' onClick={e => e.stopPropagation()}>
               {order.status === 1 && (
                 <Button
                   size='mini'
                   className='btn-ship'
-                  loading={state.shipping && state.shippingId === order.id}
+                  loading={shipping === order.id}
                   onClick={() => handleShip(order.id)}
                 >
                   发货
@@ -153,20 +195,31 @@ export default function LeaderOrders() {
               )}
               {order.status === 6 && (
                 <>
-                  <Button size='mini' className='btn-reject' onClick={() => handleRefund(order.id, false)}>
+                  <Button
+                    size='mini'
+                    className='btn-reject'
+                    onClick={() => handleRefund(order.id, false)}
+                  >
                     拒绝
                   </Button>
-                  <Button size='mini' className='btn-approve' onClick={() => handleRefund(order.id, true)}>
+                  <Button
+                    size='mini'
+                    className='btn-approve'
+                    onClick={() => handleRefund(order.id, true)}
+                  >
                     同意退款
                   </Button>
                 </>
               )}
             </View>
-          </View>
+          </Navigator>
         ))}
 
-        {state.loading && <View className='loading'><Text>加载中...</Text></View>}
-      </View>
+        {loading && <View className='loading-text'><Text>加载中...</Text></View>}
+        {!hasMore && orders.length > 0 && (
+          <View className='no-more'><Text>— 没有更多了 —</Text></View>
+        )}
+      </ScrollView>
     </View>
   )
 }
